@@ -4,7 +4,7 @@ import re
 
 def hint_weather(user_msg: str) -> bool:
     weather_terms = r"(weather|rain|temperature|forecast|sunny|snow|wind)"
-    date_terms = r"(today|tomorrow|weekend|\b\d{2}-\d{2}-\d{4}\b)"
+    date_terms = r"(today|tomorrow|weekend|\b\d{4}-\d{2}-\d{2}\b)"
     return bool(re.search(weather_terms, user_msg, re.I)) or bool(re.search(date_terms, user_msg, re.I))
 
 def hint_country_facts(user_msg: str) -> bool:
