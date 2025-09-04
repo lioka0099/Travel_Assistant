@@ -1,0 +1,74 @@
+# ---- OS clutter ----
+.DS_Store
+**/.DS_Store
+Thumbs.db
+__MACOSX/
+
+# ---- Python bytecode ----
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ---- C extensions ----
+*.so
+*.pyd
+*.dll
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# ---- Packages / builds ----
+*.egg-info/
+*.egg
+*.eggs/
+dist/
+build/
+wheels/
+
+# ---- Logs ----
+*.log
+logs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ---- Testing / coverage / caches ----
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.pytype/
+.pyre/
+.hypothesis/
+.cache/
+
+# ---- Streamlit ----
+.streamlit/secrets.toml
+.streamlit/credentials.toml
+
+# ---- Env & secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Editors / IDEs ----
+.vscode/
+.idea/
+*.iml
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# ---- Jupyter----
+.ipynb_checkpoints/
+
+# ---- Misc ----
+*.sqlite3
+*.db
