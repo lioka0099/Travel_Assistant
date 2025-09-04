@@ -58,3 +58,10 @@ class TimePlan(BaseModel):
     iso_start: Optional[str] = None         # for explicit ranges
     iso_end: Optional[str] = None
     rationale: str = Field(..., description="Brief reason for the selection")
+
+class PlacePlan(BaseModel):
+    resolved_place: Optional[str] = None
+    resolution: Literal["explicit","implicit_previous","implicit_first","implicit_last","none"] = "none"
+    ambiguous: bool = False
+    alternatives: Optional[List[str]] = None
+    rationale: str = Field(..., description="≤1 line why you chose this")

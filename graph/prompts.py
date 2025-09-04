@@ -88,3 +88,11 @@ Notes:
 - For “next weekend” or similar, choose 'weekend' (we resolve it later in destination timezone).
 - If nothing is time-specific, use target_type="unspecified".
 """
+
+PLACE_RESOLVER_SYS = """You resolve the destination/place referred to in the user's message.
+Inputs: message, active_destination, destinations (history).
+Rules:
+- If a place is named, set resolution="explicit" and return it.
+- If user says previous/first/last/same/continue (any language), map to destinations accordingly.
+- If unsure or multiple plausible places, set ambiguous=true and return up to 3 alternatives.
+Do NOT invent places."""
