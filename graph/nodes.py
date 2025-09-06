@@ -29,6 +29,12 @@ from .helpers.timeplan import resolve_relative_dates, weekend_for_country
 # ------------------------------- nodes ----------------------------------
 
 def route_intent(state: GraphState) -> Dict[str, Any]:
+    """Classify the latest user message to an intent and update offtopic count.
+
+    Returns keys:
+    - intent: one of 'destinations', 'packing', 'attractions', 'logistics', 'smalltalk', 'weather'
+    - offtopic_count: increments when in smalltalk to trigger redirect later
+    """
     msg = state["user_msg"].strip()
     intent = chat_completion_simple(
         [
@@ -52,6 +58,7 @@ def route_intent(state: GraphState) -> Dict[str, Any]:
     return {"intent": intent, "offtopic_count": new_count}
 
 def next_travel_question(profile: Dict[str, Any]) -> str:
+    """Return the next onboarding question based on missing profile slots."""
     if not profile.get("destination"):
         return "Where are you thinking of traveling?"
     if not profile.get("start_date"):
@@ -63,6 +70,7 @@ def next_travel_question(profile: Dict[str, Any]) -> str:
     return "What would you like help with first—destinations, packing, or things to do?"
 
 def current_trip_context(state: GraphState) -> dict | None:
+    """Extract current destination and dates from the profile, if available."""
     profile = state.get("user_profile", {}) or {}
     dest = profile.get("active_destination") or profile.get("destination")
     if not dest:
@@ -70,6 +78,7 @@ def current_trip_context(state: GraphState) -> dict | None:
     return {"destination": dest, "start": profile.get("start_date"), "end": profile.get("end_date")}
 
 def smalltalk(state: GraphState) -> Dict[str, Any]:
+    """Handle brief chit-chat while gently steering back to planning."""
     profile = state.get("user_profile", {}) or {}
     ctx = current_trip_context(state)
     if ctx:
@@ -96,6 +105,7 @@ def smalltalk(state: GraphState) -> Dict[str, Any]:
     return {"final": reply, "offtopic_count": count}
 
 def handler(state: GraphState) -> Dict[str, Any]:
+    """Normalize message text and clamp history size; set default data flags."""
     msg = " ".join(state["user_msg"].split()).strip()
     short_hist = (state.get("history") or [])[-12:]
     data = dict(state.get("data") or {})
@@ -104,6 +114,11 @@ def handler(state: GraphState) -> Dict[str, Any]:
     return {"user_msg": msg, "history": short_hist, "data": data}
 
 def resolve_place_llm(state: GraphState) -> dict:
+    """Resolve the place referenced in the message using an LLM schema call.
+
+    When ambiguous, surface disambiguation options; otherwise enrich state with
+    the resolved place and profile updates.
+    """
     if state.get("intent") == "smalltalk":
         return {}
     profile = state.get("user_profile") or {}
@@ -140,6 +155,7 @@ def resolve_place_llm(state: GraphState) -> dict:
 
 
 def _is_weather_followup(state: Dict[str, Any], msg: str) -> bool:
+    """Heuristic to detect short weather follow-ups to keep weather context alive."""
     m = (msg or "").lower().strip()
     
     # Simple acknowledgments should NOT be treated as weather follow-ups
@@ -157,6 +173,7 @@ def _is_weather_followup(state: Dict[str, Any], msg: str) -> bool:
     return time_words and (has_recent_weather or said_weather)
 
 def plan_tools(state: GraphState) -> Dict[str, Any]:
+    """Decide which tools (weather, country facts, web) to call this turn."""
     intent = state.get("intent", "")
     profile = state.get("user_profile", {}) or {}
     summary = state.get("summary", "")
@@ -203,6 +220,7 @@ def plan_tools(state: GraphState) -> Dict[str, Any]:
     return {"data": new_data}
 
 def plan_time(state: GraphState) -> Dict[str, Any]:
+    """Normalize time intent (today/tomorrow/weekend/date/range) into structured fields."""
     data = dict(state.get("data") or {})
     plan = data.get("plan") or {}
     if not (plan.get("weather") or plan.get("web")):
@@ -232,6 +250,7 @@ def plan_time(state: GraphState) -> Dict[str, Any]:
     return {"data": data}
 
 def _needs_hard_clarification(plan: dict, state: GraphState) -> Tuple[bool, Optional[str]]:
+    """Check if a hard blocking slot (like place for weather) is missing."""
     data = state.get("data") or {}
     resolved = data.get("resolved_place")
     place = plan.get("place") or resolved
@@ -240,6 +259,7 @@ def _needs_hard_clarification(plan: dict, state: GraphState) -> Tuple[bool, Opti
     return False, None
 
 def clarify_missing(state: GraphState) -> dict:
+    """Ask a single clear question when required input is missing."""
     plan = (state.get("data") or {}).get("plan") or {}
     need, q = _needs_hard_clarification(plan, state)
     if need and q:
@@ -247,6 +267,7 @@ def clarify_missing(state: GraphState) -> dict:
     return {}
 
 def fetch_data(state: GraphState) -> Dict[str, Any]:
+    """Execute tool calls per plan and merge fetched facts into state.data."""
     data_in = state.get("data") or {}
     plan = data_in.get("plan") or {}
 
@@ -343,6 +364,7 @@ def fetch_data(state: GraphState) -> Dict[str, Any]:
     return out
 
 def compose_answer(state: GraphState) -> Dict[str, Any]:
+    """Draft the assistant's reply using facts and recent context via LLM."""
     facts = state.get("data", {}).get("facts", {}) or {}
     now_raw = facts.get("now", "")
     # Clean up the timestamp - just show the date
@@ -427,6 +449,7 @@ def compose_answer(state: GraphState) -> Dict[str, Any]:
     return {"draft": draft, "critique_needed": critique_needed}
 
 def critique(state: GraphState) -> Dict[str, Any]:
+    """Optionally critique long/uncertain drafts to enforce quality."""
     facts = state.get("data", {}).get("facts", {})
     facts_brief = "yes" if facts else "no"
     draft = state.get("draft", "")
@@ -453,6 +476,7 @@ Facts present? {facts_brief}"""},
     return {"critique_notes": notes}
 
 def revise(state: GraphState) -> Dict[str, Any]:
+    """Revise the draft per critique; otherwise pass draft through as final."""
     notes = state.get("critique_notes", "")
     draft = state.get("draft", "")
     
@@ -470,6 +494,7 @@ def revise(state: GraphState) -> Dict[str, Any]:
         return {"final": draft}
 
 def update_summary(state: GraphState) -> Dict[str, Any]:
+    """Maintain a compact, durable conversation summary for future turns."""
     prev = state.get("summary", "")
     user = state["user_msg"]
     assistant = state.get("final") or state.get("draft", "")

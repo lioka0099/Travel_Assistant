@@ -1,16 +1,22 @@
 import re
 
-#Used as fallback is the llm fails to determine the intent of the user.
+# Heuristic fallbacks used when the LLM's tool plan is uncertain.
 
 def hint_weather(user_msg: str) -> bool:
+    """Return True if the message likely implies a weather query.
+
+    Matches common weather terms or explicit ISO dates.
+    """
     weather_terms = r"(weather|rain|temperature|forecast|sunny|snow|wind)"
     date_terms = r"(today|tomorrow|weekend|\b\d{4}-\d{2}-\d{2}\b)"
     return bool(re.search(weather_terms, user_msg, re.I)) or bool(re.search(date_terms, user_msg, re.I))
 
 def hint_country_facts(user_msg: str) -> bool:
+    """Return True if the message likely asks about country logistics/facts."""
     fact_terms = r"(currency|visa|language|timezone|plug|outlet|capital)"
     return bool(re.search(fact_terms, user_msg, re.I))
 
 def hint_web_search(user_msg: str) -> bool:
+    """Return True if the message suggests a need for fresh web information."""
     pat = r"(open\s+today|hours|closed|latest|news|strike|event(s)?\s+(today|tonight|this weekend)|update)"
     return bool(re.search(pat, user_msg, re.I))

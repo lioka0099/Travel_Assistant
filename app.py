@@ -183,13 +183,17 @@ for key, default in [
 
 location = get_geolocation()
 
-# Auto-detect user location on first load
+# Auto-detect user location on first load.
+# We only call get_client_location_data when both coordinates are available.
 if location and isinstance(location, dict) and "coords" in location:
     coords = location.get("coords") or {}
     lat = coords.get("latitude")
     lon = coords.get("longitude")
     with st.spinner("Detecting your location..."):
-        location_data = get_client_location_data(lat, lon)
+        if lat is not None and lon is not None:
+            location_data = get_client_location_data(lat, lon)
+        else:
+            location_data = None
         if location_data:
             st.session_state.user_profile["current_location"] = location_data["location_string"]
             st.session_state.user_profile["location_data"] = location_data
