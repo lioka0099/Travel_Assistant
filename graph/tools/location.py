@@ -5,11 +5,50 @@ from typing import Optional, Dict, Any
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 IP_GEOLOCATION_URL = "http://ip-api.com/json/"  # Free service, no API key needed
 
+def get_client_ip_from_headers() -> Optional[str]:
+    """Extract the real client IP from Streamlit's request headers.
+
+    Tries X-Forwarded-For first (left-most IP), then falls back to the
+    request's remote_ip attribute. Returns None if unavailable.
+    """
+    try:
+        # Local imports to avoid hard dependency at module import time
+        from streamlit.runtime.scriptrunner import get_script_run_ctx  # type: ignore
+        from streamlit.web.server import Server  # type: ignore
+
+        ctx = get_script_run_ctx()
+        if not ctx:
+            return None
+        server = Server.get_current()
+        if not server:
+            return None
+        # _get_session_info is internal; guard with try/except
+        try:
+            session_info = server._get_session_info(ctx.session_id)  # type: ignore[attr-defined]
+        except Exception:
+            session_info = None
+        if not session_info or not getattr(session_info, "ws", None):
+            return None
+        req = session_info.ws.request
+        # Prefer X-Forwarded-For when behind proxies/load balancers
+        xff = req.headers.get("X-Forwarded-For") if getattr(req, "headers", None) else None
+        if xff:
+            return xff.split(",")[0].strip()
+        # Fallback to remote_ip
+        return getattr(req, "remote_ip", None)
+    except Exception:
+        return None
+
 def get_location_from_ip() -> Optional[Dict[str, Any]]:
     """Get user's location from their IP address."""
     try:
-        # Get IP geolocation
-        response = requests.get(IP_GEOLOCATION_URL, timeout=10)
+        # Prefer the client IP from the incoming request headers if available
+        client_ip = get_client_ip_from_headers()
+        if client_ip:
+            response = requests.get(f"{IP_GEOLOCATION_URL}{client_ip}", timeout=10)
+        else:
+            # Fallback: service will use the server IP
+            response = requests.get(IP_GEOLOCATION_URL, timeout=10)
         response.raise_for_status()
         ip_data = response.json()
         
@@ -34,7 +73,7 @@ def get_location_from_ip() -> Optional[Dict[str, Any]]:
                 "country_code": country_code,
                 "latitude": lat,
                 "longitude": lon,
-                "ip": ip_data.get("query", ""),
+                "ip": ip_data.get("query", client_ip or ""),
                 "detected_via": "ip_geolocation"
             }
         else:
