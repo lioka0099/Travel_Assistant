@@ -3,11 +3,9 @@ import os
 from langgraph.graph import StateGraph, START, END
 from .state import GraphState
 
-# LangSmith imports
 from langsmith import Client
 from langchain_core.tracers import LangChainTracer
 
-# Nodes
 from .nodes import (
     route_intent,
     smalltalk,
