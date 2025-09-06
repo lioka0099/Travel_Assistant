@@ -14,17 +14,26 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* Theme-aware CSS variables */
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --text-primary: var(--text-color);
+        --bg-primary: var(--background-color);
+        --bg-secondary: var(--secondary-background-color);
+        --border-color: var(--border-color);
+    }
+    
     .main-header {
         text-align: center;
         padding: 1.5rem 0;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--primary-gradient);
         color: white;
         border-radius: 10px;
         margin-bottom: 1rem;
     }
     
     .location-badge {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--primary-gradient);
         color: white;
         padding: 0.5rem 1rem;
         border-radius: 20px;
@@ -40,34 +49,73 @@ st.markdown("""
         padding: 1rem;
     }
     
+    .welcome-section h1, .welcome-section h2 {
+        color: var(--text-primary);
+    }
+    
     .features-row {
         display: flex;
         justify-content: space-around;
         flex-wrap: wrap;
         margin: 1rem 0;
-        gap: 0.5rem;
+        gap: 0.8rem;
     }
     
     .feature-item {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        padding: 0.5rem;
-        background: #f8f9fa;
-        border-radius: 8px;
+        padding: 0.8rem 1rem;
+        background: rgba(102, 126, 234, 0.1);
+        color: var(--text-primary);
+        border: 2px solid rgba(102, 126, 234, 0.3);
+        border-radius: 12px;
         flex: 1;
         min-width: 200px;
         justify-content: center;
+        transition: all 0.3s ease;
+        font-weight: 500;
+        backdrop-filter: blur(10px);
+    }
+    
+    .feature-item:hover {
+        transform: translateY(-3px);
+        background: rgba(102, 126, 234, 0.2);
+        border-color: rgba(102, 126, 234, 0.5);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+    }
+    
+    /* Dark mode specific feature item styling */
+    .stApp[data-theme="dark"] .feature-item {
+        background: rgba(102, 126, 234, 0.15);
+        border-color: rgba(102, 126, 234, 0.4);
+    }
+    
+    .stApp[data-theme="dark"] .feature-item:hover {
+        background: rgba(102, 126, 234, 0.25);
+        border-color: rgba(102, 126, 234, 0.6);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
     }
     
     .examples-section {
-        background: #f8f9fa;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
         padding: 1rem;
         border-radius: 10px;
         margin: 1rem 0;
+        border: 1px solid var(--border-color);
     }
     
-    .example-item {
+    .examples-section h3 {
+        color: var(--text-primary);
+        margin-top: 0;
+    }
+    
+    .examples-section ul {
+        color: var(--text-primary);
+    }
+    
+    .examples-section li {
         margin: 0.3rem 0;
         padding: 0.3rem 0;
     }
@@ -79,6 +127,37 @@ st.markdown("""
     
     .stChatMessage {
         margin: 1rem 0;
+    }
+    
+    /* Ensure text is readable in both themes */
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+        color: var(--text-primary) !important;
+    }
+    
+    /* Style the welcome card */
+    .welcome-card {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+        border: 1px solid var(--border-color);
+    }
+    
+    .welcome-card h3 {
+        color: var(--text-primary);
+        margin-top: 0;
+    }
+    
+    .welcome-card ul {
+        color: var(--text-primary);
+        margin: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .welcome-card li {
+        margin: 0.5rem 0;
+        line-height: 1.4;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -117,7 +196,7 @@ if not st.session_state.chat_started:
     # Welcome message
     st.markdown("""
     <div class="welcome-section">
-        <h1>🌍 Your presonal travel assistant</h1>
+        <h1>🌍 Your personal travel assistant</h1>
         <h2>I can help you with:</h2>
     </div>
     """, unsafe_allow_html=True)
