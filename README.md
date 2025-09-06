@@ -202,11 +202,13 @@ streamlit run app.py
 
 Environment variables (optional but recommended):
 
-| Variable            | Purpose                                  |
-| ------------------- | ---------------------------------------- |
-| `TAVILY_API_KEY`    | Enables web search via Tavily            |
-| `LANGCHAIN_API_KEY` | Enables LangSmith tracing (if available) |
-| `LANGCHAIN_PROJECT` | Optional project name for tracing        |
+| Variable            | Purpose                                                   |
+| ------------------- | --------------------------------------------------------- |
+| `GROQ_API_KEY`      | Required for Groq LLM (used by `langchain_groq.ChatGroq`) |
+| `GROQ_MODEL`        | Optional model name; defaults to `llama-3.1-8b-instant`   |
+| `TAVILY_API_KEY`    | Enables web search via Tavily                             |
+| `LANGCHAIN_API_KEY` | Enables LangSmith tracing (if available)                  |
+| `LANGCHAIN_PROJECT` | Optional project name for tracing                         |
 
 You can export these in your shell or a `.env` file (if you prefer a loader).
 
@@ -219,30 +221,23 @@ Try it live: [travel-assistant-demo.streamlit.app](https://travel-assistant-demo
 <div align="center">
   <figure>
     <img src="screenshots/1.png" alt="Home screen and features" width="900"/>
-    <figcaption><b>Home</b> — features and welcome examples</figcaption>
   </figure>
   <figure>
     <img src="screenshots/2.png" alt="Smalltalk pivot back to travel planning" width="900"/>
-    <figcaption><b>Smalltalk → Travel</b> — gentle pivot back to planning</figcaption>
   </figure>
   <figure>
     <img src="screenshots/3.png" alt="Nearby destinations based on user location" width="900"/>
-    <figcaption><b>Near me</b> — suggestions based on your location</figcaption>
   </figure>
   <figure>
     <img src="screenshots/4.png" alt="Weather by date with daily highs/lows and precip" width="900"/>
-    <figcaption><b>Weather by dates</b> — daily highs/lows and precipitation</figcaption>
   </figure>
   <figure>
     <img src="screenshots/5.png" alt="Itinerary suggestions for two-week trip" width="900"/>
-    <figcaption><b>Itinerary</b> — two-week plan suggestions</figcaption>
   </figure>
   <figure>
     <img src="screenshots/6.png" alt="Hotel recommendations" width="900"/>
-    <figcaption><b>Hotels</b> — example recommendations</figcaption>
   </figure>
   <figure>
     <img src="screenshots/7.png" alt="Packing advice" width="900"/>
-    <figcaption><b>Packing</b> — essentials list</figcaption>
   </figure>
 </div>
