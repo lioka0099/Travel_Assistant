@@ -1,4 +1,4 @@
-### Travel Assistant — LangGraph + Streamlit
+# ✈️ Travel Assistant — LangGraph + Streamlit
 
 An LLM-powered travel assistant built with LangGraph and Streamlit. It plans trips, fetches weather and country facts, and pivots gracefully between smalltalk and task-focused assistance.
 
