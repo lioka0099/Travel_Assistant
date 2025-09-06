@@ -20,7 +20,6 @@ from .tools.clock import now_iso, today
 from .tools.weather import geocode, forecast_daily
 from .tools.countries import country_facts
 from .tools.tavily import web_search
-from .tools.location import get_location_from_ip, geocode_location, calculate_distance, get_travel_time_estimate
 
 #helpers
 from .helpers.merge import deep_merge
@@ -139,22 +138,6 @@ def resolve_place_llm(state: GraphState) -> dict:
 
     return {"data": data}
 
-def resolve_user_location(state: GraphState) -> Dict[str, Any]:
-    """Resolve and geocode the user's current location."""
-    profile = state.get("user_profile", {})
-    
-    # Check if we already have location data
-    if "location_data" in profile:
-        return {}
-    
-    # Try to get location from IP if not already detected
-    location_data = get_location_from_ip()
-    if location_data:
-        profile["current_location"] = location_data["location_string"]
-        profile["location_data"] = location_data
-        return {"user_profile": profile}
-    
-    return {}
 
 def _is_weather_followup(state: Dict[str, Any], msg: str) -> bool:
     m = (msg or "").lower().strip()

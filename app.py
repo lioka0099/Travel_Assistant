@@ -2,7 +2,9 @@ import os
 import streamlit as st
 from graph import build_graph
 from graph.state import GraphState
-from graph.tools.location import get_location_from_ip
+from graph.tools.location import get_client_location_data
+from streamlit_js_eval import get_geolocation
+
 
 # ---------- 1) App setup ----------
 st.set_page_config(
@@ -179,10 +181,15 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
+location = get_geolocation()
+
 # Auto-detect user location on first load
-if "location_detected" not in st.session_state:
+if location and isinstance(location, dict) and "coords" in location:
+    coords = location.get("coords") or {}
+    lat = coords.get("latitude")
+    lon = coords.get("longitude")
     with st.spinner("Detecting your location..."):
-        location_data = get_location_from_ip()
+        location_data = get_client_location_data(lat, lon)
         if location_data:
             st.session_state.user_profile["current_location"] = location_data["location_string"]
             st.session_state.user_profile["location_data"] = location_data

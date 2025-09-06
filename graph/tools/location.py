@@ -3,29 +3,33 @@ import math
 from typing import Optional, Dict, Any
 
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+BIGDATACLOUD_REVERSE_URL = "https://api.bigdatacloud.net/data/reverse-geocode-client"
 IP_GEOLOCATION_URL = "http://ip-api.com/json/"  # Free service, no API key needed
 
-def get_location_from_ip() -> Optional[Dict[str, Any]]:
-    """Get user's location from their IP address."""
+def get_client_location_data(latitude: float, longitude: float) -> Optional[Dict[str, Any]]:
+    """Get the client location data by latitude and longitude"""
     try:
-        # Get IP geolocation
-        response = requests.get(IP_GEOLOCATION_URL, timeout=10)
-        response.raise_for_status()
-        ip_data = response.json()
-        
-        if ip_data.get("status") == "success":
-            # Extract location info
-            city = ip_data.get("city", "")
-            region = ip_data.get("regionName", "")
-            country = ip_data.get("country", "")
-            country_code = ip_data.get("countryCode", "")
-            lat = ip_data.get("lat")
-            lon = ip_data.get("lon")
-            
-            # Create a readable location string
+        # 1) Reverse geocoding if coordinates
+        if latitude is not None and longitude is not None:
+            r = requests.get(
+                BIGDATACLOUD_REVERSE_URL,
+                params={
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "localityLanguage": "en",
+                },
+                timeout=10,
+            )
+            r.raise_for_status()
+            data = r.json()
+            city = data.get("city") or data.get("locality") or ""
+            region = data.get("principalSubdivision") or ""
+            country = data.get("countryName") or ""
+            country_code = data.get("countryCode") or ""
+            lat = float(data.get("latitude", latitude))
+            lon = float(data.get("longitude", longitude))
             location_parts = [city, region, country]
-            location_string = ", ".join([part for part in location_parts if part])
-            
+            location_string = ", ".join([p for p in location_parts if p])
             return {
                 "location_string": location_string,
                 "city": city,
@@ -34,15 +38,11 @@ def get_location_from_ip() -> Optional[Dict[str, Any]]:
                 "country_code": country_code,
                 "latitude": lat,
                 "longitude": lon,
-                "ip": ip_data.get("query", ""),
-                "detected_via": "ip_geolocation"
+                "detected_via": "browser_geolocation",
             }
-        else:
-            print(f"IP geolocation failed: {ip_data.get('message', 'Unknown error')}")
-            return None
             
     except Exception as e:
-        print(f"IP geolocation error: {e}")
+        print(f"get client location data error: {e}")
         return None
 
 def geocode_location(place: str) -> Optional[Dict[str, Any]]:
