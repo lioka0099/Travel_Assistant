@@ -17,13 +17,24 @@ Output policy (STRICT):
 - Remember: you are returning JSON only (no text before or after).
 """
 
+STRICT_FACTS_POLICY = """
+Facts policy (MANDATORY):
+- If external data is provided, you MUST use it and present it.
+- Do NOT claim you lack access to data that is already provided in [Context].
+- Do NOT ask the user to check other websites for the same data you already have.
+"""
+
 ROUTER_PROMPT = """Classify the user's message into exactly one intent:
 - destinations, packing, attractions, logistics, smalltalk
 
 Rules:
-- If a travel intent appears anywhere in the message, choose that travel intent over smalltalk.
-- Weather/forecast/temperature/rain/snow/hot/cold -> weather.
-- If unclear among multiple travel intents, pick the most specific one (e.g., weather > logistics).
+1) If the user_msg contains weather/forecast/temperature/“today”/“tomorrow”/“weekend”/“tonight” etc. ⇒ prefer "weather".
+2) If the user_msg contains pack/packing/clothes/what to wear ⇒ "packing".
+3) If the user_msg asks about things to do/see/museums/attractions ⇒ "attractions".
+4) If the user_msg asks about transport/visa/currency/hours/open/closed/tickets ⇒ "logistics".
+5) If user_msg is a short follow-up (≤ 5 tokens) AND prior_intent is not "smalltalk", then keep prior_intent unless rule (1) picks "weather".
+6) If has_travel_context is true, do NOT choose "smalltalk".
+7) Only choose "smalltalk" if the message is clearly chit-chat and none of the above rules apply.
 - Return ONLY the intent word.
 User: {user_msg}
 """
@@ -47,14 +58,21 @@ Using the conversation and any fetched data, answer the user's latest message.
 - Summary: {summary}
 - Recent: {recent}
 
+{facts_policy}
+
 [Reasoning steps]
 {checklist}
 
 [Output style]
-- If weather-by-date data is available, output in the ANSWER text:
+- If weather-by-date data is available, output:
   1) A one-line TL;DR.
-  2) Then one bullet per date: "- YYYY-MM-DD: High X°/Low Y° (precip P%)".
+  2) Then one bullet per date: "- YYYY-MM-DD: X°/Y° (precip P%)".
 - Otherwise, reply in 2–3 crisp sentences.
+- If a sources line is provided below, append it as the last line **verbatim**.
+- If no sources are provided, **do not** add a sources section.
+- **Never** write placeholders like "[Insert source(s) ...]" or "check a reliable source".
+- Do NOT include prefaces like "Here is", "Here's a revised version", "Draft:", "Summary:", or any explanation.
+- Output ONLY the final answer text the user should see.
 
 [Response contract — RETURN JSON ONLY]
 Return a single JSON object with EXACTLY these keys and types:

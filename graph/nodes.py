@@ -12,7 +12,7 @@ from llm.llm_client import (
     PlacePlan,
 )
 from .prompts import (
-    SYSTEM_PROMPT, ROUTER_PROMPT, COMPOSE_TMPL, SUMMARY_TMPL, REASONING_CHECKLIST,
+    STRICT_FACTS_POLICY, SYSTEM_PROMPT, ROUTER_PROMPT, COMPOSE_TMPL, SUMMARY_TMPL, REASONING_CHECKLIST,
     SMALLTALK_REDIRECT_PROMPT, PLANNER_SYS, TIME_PLANNER_SYS, PLACE_RESOLVER_SYS
 )
 from .policies import hint_weather, hint_country_facts, hint_web_search
@@ -365,6 +365,7 @@ def compose_answer(state: GraphState) -> Dict[str, Any]:
         facts=facts_brief or "none",
         summary=summary,
         recent=recent_pairs or "(none)",
+        facts_policy=STRICT_FACTS_POLICY,
         checklist=REASONING_CHECKLIST,
         user_msg=state["user_msg"],
         now=now_clean or "now",
