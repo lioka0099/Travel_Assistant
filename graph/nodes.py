@@ -39,7 +39,11 @@ def route_intent(state: GraphState) -> Dict[str, Any]:
     ).strip().lower()
 
     recent_intent = state.get("intent")
-    if intent == "smalltalk" and recent_intent and recent_intent != "smalltalk" and len(msg.split()) <= 3:
+    
+    # Special handling for weather follow-ups
+    if intent == "smalltalk" and recent_intent == "weather" and len(msg.split()) <= 3:
+        intent = "weather"
+    elif intent == "smalltalk" and recent_intent and recent_intent != "smalltalk" and len(msg.split()) <= 3:
         intent = recent_intent
 
     new_count = state.get("offtopic_count", 0)
@@ -135,12 +139,20 @@ def resolve_place_llm(state: GraphState) -> dict:
     return {"data": data}
 
 def _is_weather_followup(state: Dict[str, Any], msg: str) -> bool:
-    m = (msg or "").lower()
-    time_words = any(w in m for w in ["weekend","today","tomorrow","tonight","morning","evening","afternoon"])
+    m = (msg or "").lower().strip()
+    
+    # Simple acknowledgments should NOT be treated as weather follow-ups
+    simple_acks = ["thanks", "thank you", "ok", "okay", "got it", "perfect", "great", "awesome"]
+    if m in simple_acks:
+        return False
+    
+    # Check for time-related weather follow-ups
+    time_words = any(w in m for w in ["weekend","today","tomorrow","tonight","morning","evening","afternoon","next week","this week"])
     facts = ((state.get("data") or {}).get("facts") or {})
     has_recent_weather = bool((facts.get("weather_by_place") or {}))
     last_assistant = next((h for h in reversed(state.get("history") or []) if h.get("role")=="assistant"), None)
     said_weather = "weather" in (last_assistant.get("content","").lower() if last_assistant else "")
+    
     return time_words and (has_recent_weather or said_weather)
 
 def plan_tools(state: GraphState) -> Dict[str, Any]:
@@ -173,6 +185,8 @@ def plan_tools(state: GraphState) -> Dict[str, Any]:
     print(f"DEBUG: msg='{msg}'")
     print(f"DEBUG: plan.need_weather={plan.need_weather}, hint_weather={hint_weather(msg)}, final need_weather={need_weather}")
     print(f"DEBUG: place={place}")
+    print(f"DEBUG: llm_resolved={llm_resolved}")
+    print(f"DEBUG: resolve_place(state)={resolve_place(state)}")
 
     data_plan = {"weather": need_weather, "country": need_country, "web": need_web, "place": place}
     new_data = deep_merge(data_block, {"plan": data_plan, "web_allowed": web_allowed})
@@ -240,6 +254,7 @@ def fetch_data(state: GraphState) -> Dict[str, Any]:
         g = geocode(place_to_use)
         print(f"DEBUG: geocode result: {g}")
         country_code = g.get("country_code") or g.get("country") if g else None
+        print(f"DEBUG: country_code from geocode: {country_code}")
         if g:
             units = data_in.get("units", "metric")
             print(f"DEBUG: Calling forecast_daily with lat={g['lat']}, lon={g['lon']}, units={units}")
@@ -250,7 +265,11 @@ def fetch_data(state: GraphState) -> Dict[str, Any]:
             place_tz = wx.get("timezone")
             if place_tz:
                 facts["today"] = today(place_tz)
-            profile_update = remember_place(state, g["name"])
+            
+            # Remember the user's selected place name, not just the geocoded name
+            # This ensures that user selections like "2" -> "Lyon" are properly remembered
+            place_to_remember = place_to_use  # Use the user's selection
+            profile_update = remember_place(state, place_to_remember)
         else:
             print(f"DEBUG: geocode returned None for place: {place_to_use}")
 
@@ -293,6 +312,7 @@ def fetch_data(state: GraphState) -> Dict[str, Any]:
         elif tt in ("today", "tomorrow", "weekend"):
             base_iso = facts["today"]
             localized_weekend = weekend_for_country(country_code)
+            print(f"DEBUG: country_code for weekend: {country_code}, weekend: {localized_weekend}")
             target_dates = resolve_relative_dates(tt, base_iso, weekend=localized_weekend)
             facts["weekend_days"] = localized_weekend  # e.g., (4, 5) for Fri–Sat
 
@@ -351,7 +371,9 @@ def compose_answer(state: GraphState) -> Dict[str, Any]:
         cf = facts["country"]
         facts_brief += f"Country: {cf['name']}, capital {cf['capital']}, currency {', '.join(cf['currencies'])}. "
 
-    if "web" in facts:
+    # Only include web sources for non-weather responses
+    intent = state.get("intent", "")
+    if "web" in facts and intent != "weather":
         links = "; ".join(f"[{i+1}] {link['title']}" for i, link in enumerate(facts["web"]))
         facts_brief += f"Web sources: {links}. "
 
@@ -381,12 +403,22 @@ def compose_answer(state: GraphState) -> Dict[str, Any]:
     )
 
     draft = res.answer
-    critique_needed = bool(facts_brief) or len(draft) > 800 or (res.confidence < 0.7)
+    
+    # Only critique if the draft is very long or has low confidence
+    # For weather responses with facts, trust the LLM more
+    critique_needed = len(draft) > 800 or (res.confidence < 0.5)
+    
     return {"draft": draft, "critique_needed": critique_needed}
 
 def critique(state: GraphState) -> Dict[str, Any]:
     facts = state.get("data", {}).get("facts", {})
     facts_brief = "yes" if facts else "no"
+    draft = state.get("draft", "")
+    
+    # If the draft is already good and concise, don't critique
+    if len(draft) < 200 and "weather" in draft.lower() and "°C" in draft:
+        return {"critique_notes": "OK"}
+    
     notes = chat_completion_simple(
         [
             {"role": "system", "content": "Be terse."},
@@ -396,7 +428,7 @@ def critique(state: GraphState) -> Dict[str, Any]:
 Return either "OK" or "ISSUES: <short bullet list of fixes>"
 
 Draft:
-{state["draft"]}
+{draft}
 
 Facts present? {facts_brief}"""},
         ],
@@ -406,16 +438,20 @@ Facts present? {facts_brief}"""},
 
 def revise(state: GraphState) -> Dict[str, Any]:
     notes = state.get("critique_notes", "")
+    draft = state.get("draft", "")
+    
     if notes.startswith("ISSUES"):
         improved = chat_completion_simple(
             [
                 {"role": "system", "content": "Revise per critique, preserve facts."},
-                {"role": "user", "content": f"Draft:\n{state['draft']}\n\nCritique:\n{notes}\n\nRewrite cleanly."},
+                {"role": "user", "content": f"Draft:\n{draft}\n\nCritique:\n{notes}\n\nRewrite cleanly."},
             ],
             temperature=0.2,
         )
         return {"final": improved}
-    return {"final": state["draft"]}
+    else:
+        # If critique says OK, use the draft as final
+        return {"final": draft}
 
 def update_summary(state: GraphState) -> Dict[str, Any]:
     prev = state.get("summary", "")

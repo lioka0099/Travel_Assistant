@@ -25,16 +25,19 @@ Facts policy (MANDATORY):
 """
 
 ROUTER_PROMPT = """Classify the user's message into exactly one intent:
-- destinations, packing, attractions, logistics, smalltalk
+- destinations, packing, attractions, logistics, smalltalk, weather
 
 Rules:
-1) If the user_msg contains weather/forecast/temperature/“today”/“tomorrow”/“weekend”/“tonight” etc. ⇒ prefer "weather".
+1) If the user_msg contains weather/forecast/temperature/"today"/"tomorrow"/"weekend"/"tonight" etc. ⇒ prefer "weather".
 2) If the user_msg contains pack/packing/clothes/what to wear ⇒ "packing".
 3) If the user_msg asks about things to do/see/museums/attractions ⇒ "attractions".
 4) If the user_msg asks about transport/visa/currency/hours/open/closed/tickets ⇒ "logistics".
-5) If user_msg is a short follow-up (≤ 5 tokens) AND prior_intent is not "smalltalk", then keep prior_intent unless rule (1) picks "weather".
-6) If has_travel_context is true, do NOT choose "smalltalk".
-7) Only choose "smalltalk" if the message is clearly chit-chat and none of the above rules apply.
+5) If the message is a short acknowledgement (e.g., "ok", "thanks", "thank you", "got it", "perfect") ⇒ "smalltalk".
+6) If user_msg is a short follow-up (≤ 5 tokens) AND prior_intent is "weather" AND NOT an acknowledgement ⇒ keep "weather".
+7) If user_msg is a short follow-up (≤ 5 tokens) AND prior_intent is not "smalltalk" AND NOT an acknowledgement ⇒ keep prior_intent unless rule (1) picks "weather".
+8) If has_travel_context is true, do NOT choose "smalltalk".
+9) Only choose "smalltalk" if the message is clearly chit-chat and none of the above rules apply.
+
 - Return ONLY the intent word.
 User: {user_msg}
 """
@@ -68,9 +71,8 @@ Using the conversation and any fetched data, answer the user's latest message.
   1) A one-line TL;DR.
   2) Then one bullet per date: "- YYYY-MM-DD: X°/Y° (precip P%)".
 - Otherwise, reply in 2–3 crisp sentences.
-- If a sources line is provided below, append it as the last line **verbatim**.
-- If no sources are provided, **do not** add a sources section.
-- **Never** write placeholders like "[Insert source(s) ...]" or "check a reliable source".
+- **NEVER** add sources, citations, or "Sources:" lines to weather responses.
+- **NEVER** write placeholders like "[Insert source(s) ...]" or "check a reliable source".
 - Do NOT include prefaces like "Here is", "Here's a revised version", "Draft:", "Summary:", or any explanation.
 - Output ONLY the final answer text the user should see.
 

@@ -76,17 +76,43 @@ def _resolve_pronoun_to_place(msg_lower: str, profile: Dict[str, Any]) -> Option
         return lst[-1]
     return None
 
+def _resolve_place_selection(msg: str, place_candidates: List[str]) -> Optional[str]:
+    """Resolve user selection like '2' to actual place name from candidates."""
+    msg = msg.strip()
+    
+    # Check if it's a number selection
+    if msg.isdigit():
+        idx = int(msg) - 1  # Convert to 0-based index
+        if 0 <= idx < len(place_candidates):
+            return place_candidates[idx]
+    
+    # Check if it's an exact match with candidates
+    for candidate in place_candidates:
+        if msg.lower() == candidate.lower():
+            return candidate
+    
+    return None
+
 def resolve_place(state: Dict[str, Any]) -> Optional[str]:
     """
     Priority:
       1) LLM-resolved (data.resolved_place)
-      2) explicit name in message (fallback heuristic)
-      3) pronoun/ordinal mapping via history (fallback)
-      4) active destination
+      2) place selection from candidates (e.g., "2" -> "Lyon")
+      3) explicit name in message (fallback heuristic)
+      4) pronoun/ordinal mapping via history (fallback)
+      5) active destination
     """
     data = state.get("data") or {}
     if data.get("resolved_place"):
         return data["resolved_place"]
+    
+    # Check for place selection from candidates
+    place_candidates = data.get("place_candidates", [])
+    if place_candidates:
+        msg = state.get("user_msg", "")
+        selected_place = _resolve_place_selection(msg, place_candidates)
+        if selected_place:
+            return selected_place
 
     msg = state.get("user_msg", "")
     

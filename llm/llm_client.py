@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 from typing import List, Dict, Optional, Type, TypeVar, Literal
 from pydantic import BaseModel,Field, ConfigDict, AliasChoices
@@ -25,6 +26,22 @@ def _chat(model: str | None = None, temperature: float = 0.2) -> ChatGroq:
         temperature=temperature,
         max_retries=2,   # mild retry for transient 5xx/validate hiccups
     )
+
+def _clean_json_response(content: str) -> str:
+    """Clean JSON response by removing control characters and fixing common issues."""
+    # Remove control characters except newlines and tabs
+    content = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', content)
+    
+    # Remove any text before the first { and after the last }
+    start = content.find('{')
+    end = content.rfind('}')
+    if start != -1 and end != -1 and end > start:
+        content = content[start:end+1]
+    
+    # Remove any backticks or markdown formatting
+    content = content.strip('`').strip()
+    
+    return content
 
 def chat_completion_simple(messages: List[Dict], model: str | None = None, temperature: float = 0.2) -> str:
     llm = _chat(model=model, temperature=temperature)
@@ -54,20 +71,39 @@ def chat_completion_structured(
         # Attempt 2: plain call + local parse into the schema
         try:
             res = llm.invoke([_to_lc_message(m) for m in base_msgs])
-            obj = json.loads(res.content)
+            cleaned_content = _clean_json_response(res.content)
+            obj = json.loads(cleaned_content)
             return schema.model_validate(obj)
-        except Exception:
+        except Exception as e2:
             # Attempt 3: one strict retry, zero temperature
-            llm_strict = _chat(model=model, temperature=0.0)
-            strict_msgs = (
-                [{"role": "system",
-                  "content": "STRICT JSON: Return EXACTLY one JSON object that matches the schema keys/types. No prose, no backticks. (JSON)"}]
-                + base_msgs
-            )
-            res2 = llm_strict.invoke([_to_lc_message(m) for m in strict_msgs])
-            obj2 = json.loads(res2.content)
-            return schema.model_validate(obj2)
-    
+            try:
+                llm_strict = _chat(model=model, temperature=0.0)
+                strict_msgs = (
+                    [{"role": "system",
+                      "content": "STRICT JSON: Return EXACTLY one JSON object that matches the schema keys/types. No prose, no backticks. (JSON)"}]
+                    + base_msgs
+                )
+                res2 = llm_strict.invoke([_to_lc_message(m) for m in strict_msgs])
+                cleaned_content2 = _clean_json_response(res2.content)
+                obj2 = json.loads(cleaned_content2)
+                return schema.model_validate(obj2)
+            except Exception as e3:
+                # Final fallback: return a default response
+                print(f"JSON parsing failed after all attempts. Errors: {e1}, {e2}, {e3}")
+                print(f"Raw response: {res2.content if 'res2' in locals() else 'N/A'}")
+                
+                # Return a default response based on the schema
+                if schema == ComposeOut:
+                    return ComposeOut(answer="I apologize, but I'm having trouble processing your request right now. Please try again.", confidence=0.1)
+                elif schema == ToolPlan:
+                    return ToolPlan(need_weather=False, need_country=False, need_web=False, rationale="Error fallback")
+                elif schema == TimePlan:
+                    return TimePlan(target_type="unspecified", rationale="Error fallback")
+                elif schema == PlacePlan:
+                    return PlacePlan(resolved_place=None, resolution="none", ambiguous=False, rationale="Error fallback")
+                else:
+                    raise e3
+
 # -- Schemas --
 
 class ComposeOut(BaseModel):
