@@ -7,8 +7,29 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage,HumanMessage,AIMessage
 import json
 
+from langsmith import Client
+from langchain_core.tracers import LangChainTracer
+
 load_dotenv()
 T = TypeVar("T", bound=BaseModel)
+
+# Initialize LangSmith client
+def _get_langsmith_client() -> Optional[Client]:
+    """Initialize LangSmith client if API key is available."""
+    api_key = os.getenv("LANGCHAIN_API_KEY")
+    if api_key:
+        return Client(api_key=api_key)
+    return None
+
+def _get_langsmith_tracer() -> Optional[LangChainTracer]:
+    """Get LangSmith tracer for tracing."""
+    client = _get_langsmith_client()
+    if client:
+        return LangChainTracer(
+            client=client,
+            project_name=os.getenv("LANGCHAIN_PROJECT", "travel-assistant")
+        )
+    return None
 
 def _to_lc_message(m:Dict):
     role,content = m['role'],m['content']
@@ -20,12 +41,23 @@ def _to_lc_message(m:Dict):
 
 def _chat(model: str | None = None, temperature: float = 0.2) -> ChatGroq:
     model_name = model or os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant"
-    return ChatGroq(
+    
+    # Get LangSmith tracer
+    tracer = _get_langsmith_tracer()
+    
+    # Create ChatGroq instance with optional tracing
+    chat_instance = ChatGroq(
         model_name=model_name,
         groq_api_key=os.environ["GROQ_API_KEY"],
         temperature=temperature,
         max_retries=2,   # mild retry for transient 5xx/validate hiccups
     )
+    
+    # Add tracer if available
+    if tracer:
+        chat_instance = chat_instance.with_config({"callbacks": [tracer]})
+    
+    return chat_instance
 
 def _clean_json_response(content: str) -> str:
     """Clean JSON response by removing control characters and fixing common issues."""

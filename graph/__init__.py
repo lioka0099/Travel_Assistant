@@ -1,7 +1,11 @@
 from __future__ import annotations
-
+import os
 from langgraph.graph import StateGraph, START, END
 from .state import GraphState
+
+# LangSmith imports
+from langsmith import Client
+from langchain_core.tracers import LangChainTracer
 
 # Nodes
 from .nodes import (
@@ -46,6 +50,25 @@ def _clarify_gate(state: GraphState) -> str:
 def _critique_gate(state: GraphState) -> str:
     """Send draft to critique only when critique_needed is true."""
     return "critique" if state.get("critique_needed") else "skip"
+
+# ---------------------------- LangSmith helpers -----------------------------
+
+def _get_langsmith_client() -> Client | None:
+    """Initialize LangSmith client if API key is available."""
+    api_key = os.getenv("LANGCHAIN_API_KEY")
+    if api_key:
+        return Client(api_key=api_key)
+    return None
+
+def _get_langsmith_tracer() -> LangChainTracer | None:
+    """Get LangSmith tracer for tracing."""
+    client = _get_langsmith_client()
+    if client:
+        return LangChainTracer(
+            client=client,
+            project_name=os.getenv("LANGCHAIN_PROJECT", "travel-assistant")
+        )
+    return None
 
 # ---------------------------- Build function -----------------------------
 
@@ -125,4 +148,12 @@ def build_graph():
     g.add_edge("critique", "revise")
     g.add_edge("revise", "update_summary")
 
-    return g.compile()
+    # Compile the graph with optional LangSmith tracing
+    compiled_graph = g.compile()
+    
+    # Add LangSmith tracer if available
+    tracer = _get_langsmith_tracer()
+    if tracer:
+        compiled_graph = compiled_graph.with_config({"callbacks": [tracer]})
+    
+    return compiled_graph
