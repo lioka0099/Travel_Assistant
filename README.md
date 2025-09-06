@@ -2,7 +2,35 @@
 
 An LLM-powered travel assistant built with LangGraph and Streamlit. It plans trips, fetches weather and country facts, and pivots gracefully between smalltalk and task-focused assistance.
 
-- **Live demo**: [travel-assistant-demo.streamlit.app](https://travel-assistant-demo.streamlit.app/)
+> Try it now → [travel-assistant-demo.streamlit.app](https://travel-assistant-demo.streamlit.app/)
+
+## TL;DR
+
+- **Agentic graph** with clear gates ensures reliable, explainable control flow
+- **Grounded answers** using live tools: weather, country facts, and search
+- **Terse prompting** with strict JSON outputs for deterministic branching
+- **Lightweight UI** in Streamlit; one-file boot with minimal setup
+
+## Quick Start
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+## Table of Contents
+
+- [Highlights](#highlights)
+- [Architecture Overview](#architecture-overview)
+- [Data Flow](#data-flow)
+- [Exact LangGraph Flow](#exact-langgraph-flow)
+- [State Contract](#state-contract)
+- [Tools](#tools)
+- [Prompt Engineering Notes (Key Decisions)](#prompt-engineering-notes-key-decisions)
+- [Local Development](#local-development)
+- [Deployed Demo](#deployed-demo)
+- [Screenshots — Sample Conversation](#screenshots--sample-conversation)
 
 ### Highlights
 
@@ -174,9 +202,11 @@ streamlit run app.py
 
 Environment variables (optional but recommended):
 
-- `TAVILY_API_KEY` — enables web search via Tavily
-- `LANGCHAIN_API_KEY` — enables LangSmith tracing (if available)
-- `LANGCHAIN_PROJECT` — optional project name for tracing
+| Variable            | Purpose                                  |
+| ------------------- | ---------------------------------------- |
+| `TAVILY_API_KEY`    | Enables web search via Tavily            |
+| `LANGCHAIN_API_KEY` | Enables LangSmith tracing (if available) |
+| `LANGCHAIN_PROJECT` | Optional project name for tracing        |
 
 You can export these in your shell or a `.env` file (if you prefer a loader).
 
@@ -189,30 +219,30 @@ Try it live: [travel-assistant-demo.streamlit.app](https://travel-assistant-demo
 <div align="center">
   <figure>
     <img src="screenshots/1.png" alt="Home screen and features" width="900"/>
-    <figcaption>Home screen and feature tiles</figcaption>
+    <figcaption><b>Home</b> — features and welcome examples</figcaption>
   </figure>
   <figure>
     <img src="screenshots/2.png" alt="Smalltalk pivot back to travel planning" width="900"/>
-    <figcaption>Smalltalk → travel pivot</figcaption>
+    <figcaption><b>Smalltalk → Travel</b> — gentle pivot back to planning</figcaption>
   </figure>
   <figure>
     <img src="screenshots/3.png" alt="Nearby destinations based on user location" width="900"/>
-    <figcaption>Nearby destinations using user location</figcaption>
+    <figcaption><b>Near me</b> — suggestions based on your location</figcaption>
   </figure>
   <figure>
     <img src="screenshots/4.png" alt="Weather by date with daily highs/lows and precip" width="900"/>
-    <figcaption>Weather by dates</figcaption>
+    <figcaption><b>Weather by dates</b> — daily highs/lows and precipitation</figcaption>
   </figure>
   <figure>
     <img src="screenshots/5.png" alt="Itinerary suggestions for two-week trip" width="900"/>
-    <figcaption>Itinerary suggestions</figcaption>
+    <figcaption><b>Itinerary</b> — two-week plan suggestions</figcaption>
   </figure>
   <figure>
     <img src="screenshots/6.png" alt="Hotel recommendations" width="900"/>
-    <figcaption>Hotel recommendations</figcaption>
+    <figcaption><b>Hotels</b> — example recommendations</figcaption>
   </figure>
   <figure>
     <img src="screenshots/7.png" alt="Packing advice" width="900"/>
-    <figcaption>Packing advice</figcaption>
+    <figcaption><b>Packing</b> — essentials list</figcaption>
   </figure>
 </div>
