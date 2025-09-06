@@ -8,13 +8,21 @@ def geocode(place: str):
     data = r.json()
     if not data.get("results"): return None
     top = data["results"][0]
-    return {"lat": top["latitude"], "lon": top["longitude"], "name": top["name"], "country": top.get("country")}
+    return {
+        "lat": top["latitude"], 
+        "lon": top["longitude"], 
+        "name": top["name"], 
+        "country": top.get("country"),
+        "country_code": top.get("country_code")
+    }
 
-def forecast_daily(lat: float, lon: float):
+def forecast_daily(lat: float, lon: float, units: str = "metric"):
     params = {
-        "latitude": lat, "longitude": lon,
+        "latitude": lat, 
+        "longitude": lon,
         "daily": ["temperature_2m_max","temperature_2m_min","precipitation_probability_max"],
         "timezone": "auto",
+        "temperature_unit": "celsius" if units == "metric" else "fahrenheit",
     }
     r = requests.get(FORECAST_URL, params=params, timeout=20)
     r.raise_for_status()

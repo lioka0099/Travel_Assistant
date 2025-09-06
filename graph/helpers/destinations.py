@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
+import re
 
 def _push_destination(profile: Dict[str, Any], name: str) -> Dict[str, Any]:
     if not name:
@@ -12,12 +13,51 @@ def _push_destination(profile: Dict[str, Any], name: str) -> Dict[str, Any]:
     return profile
 
 def remember_place(state: Dict[str, Any], place_name: Optional[str]) -> dict:
-    """Write normalized place into user_profile MRU list. Pure function w.r.t input state."""
+    """Write normalized place into user_profile MRU list."""
     if not place_name:
         return {}
     profile = (state.get("user_profile") or {}).copy()
     profile = _push_destination(profile, place_name)
     return {"user_profile": profile}
+
+def _extract_country_and_city(msg: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Extract country and city from messages like:
+    - "traveling to bulgaria to sofia" -> ("Bulgaria", "Sofia")
+    - "going to paris" -> (None, "Paris")
+    - "visiting italy" -> ("Italy", None)
+    """
+    msg_lower = msg.lower()
+    
+    # Pattern: "to [country] to [city]" or "in [country] to [city]"
+    country_city_pattern = r'\b(?:to|in|visiting|traveling to)\s+([a-z\s]+?)\s+(?:to|in)\s+([a-z\s]+?)(?:\s|$)'
+    match = re.search(country_city_pattern, msg_lower)
+    if match:
+        country = match.group(1).strip().title()
+        city = match.group(2).strip().title()
+        return country, city
+    
+    # Pattern: "to [city], [country]" or "in [city], [country]"
+    city_country_pattern = r'\b(?:to|in|visiting)\s+([a-z\s]+?),\s*([a-z\s]+?)(?:\s|$)'
+    match = re.search(city_country_pattern, msg_lower)
+    if match:
+        city = match.group(1).strip().title()
+        country = match.group(2).strip().title()
+        return country, city
+    
+    # Pattern: just a single place (could be country or city)
+    single_place_pattern = r'\b(?:to|in|visiting|traveling to)\s+([a-z\s]+?)(?:\s|$)'
+    match = re.search(single_place_pattern, msg_lower)
+    if match:
+        place = match.group(1).strip().title()
+        # Heuristic: if it's a common country name, treat as country
+        common_countries = {'italy', 'france', 'spain', 'germany', 'bulgaria', 'romania', 'greece', 'turkey', 'israel', 'jordan', 'egypt'}
+        if place.lower() in common_countries:
+            return place, None
+        else:
+            return None, place
+    
+    return None, None
 
 def _extract_place_from_message(msg: str) -> Optional[str]:
     # very naive fallback: first Capitalized token
@@ -49,6 +89,16 @@ def resolve_place(state: Dict[str, Any]) -> Optional[str]:
         return data["resolved_place"]
 
     msg = state.get("user_msg", "")
+    
+    # Check if message contains pronouns like "there", "here", "this place"
+    msg_lower = msg.lower()
+    if any(pronoun in msg_lower for pronoun in ["there", "here", "this place", "that place"]):
+        # Use the active destination from profile
+        profile = (state.get("user_profile") or {})
+        active = profile.get("active_destination") or profile.get("destination")
+        if active:
+            return active
+    
     explicit = _extract_place_from_message(msg)
     if explicit:
         return explicit
@@ -59,3 +109,11 @@ def resolve_place(state: Dict[str, Any]) -> Optional[str]:
         return pronoun
 
     return profile.get("active_destination") or profile.get("destination")
+
+def resolve_country_and_city(state: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Extract country and city from the user message.
+    Returns (country, city) tuple.
+    """
+    msg = state.get("user_msg", "")
+    return _extract_country_and_city(msg)

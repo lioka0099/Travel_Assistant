@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from datetime import date, timedelta
 
 from .state import GraphState
-from ..llm.llm_client import (
+from llm.llm_client import (
     chat_completion_simple,
     chat_completion_structured,
     ToolPlan,
@@ -16,14 +16,14 @@ from .prompts import (
     SMALLTALK_REDIRECT_PROMPT, PLANNER_SYS, TIME_PLANNER_SYS, PLACE_RESOLVER_SYS
 )
 from .policies import hint_weather, hint_country_facts, hint_web_search
-from .tools.clock import now_iso, today_str, today_in_zone
+from .tools.clock import now_iso, today
 from .tools.weather import geocode, forecast_daily
 from .tools.countries import country_facts
 from .tools.tavily import web_search
 
 #helpers
 from .helpers.merge import deep_merge
-from .helpers.destinations import remember_place, resolve_place
+from .helpers.destinations import remember_place, resolve_place, resolve_country_and_city
 from .helpers.timeplan import resolve_relative_dates, weekend_for_country
 
 # ------------------------------- nodes ----------------------------------
@@ -134,6 +134,15 @@ def resolve_place_llm(state: GraphState) -> dict:
 
     return {"data": data}
 
+def _is_weather_followup(state: Dict[str, Any], msg: str) -> bool:
+    m = (msg or "").lower()
+    time_words = any(w in m for w in ["weekend","today","tomorrow","tonight","morning","evening","afternoon"])
+    facts = ((state.get("data") or {}).get("facts") or {})
+    has_recent_weather = bool((facts.get("weather_by_place") or {}))
+    last_assistant = next((h for h in reversed(state.get("history") or []) if h.get("role")=="assistant"), None)
+    said_weather = "weather" in (last_assistant.get("content","").lower() if last_assistant else "")
+    return time_words and (has_recent_weather or said_weather)
+
 def plan_tools(state: GraphState) -> Dict[str, Any]:
     intent = state.get("intent", "")
     profile = state.get("user_profile", {}) or {}
@@ -157,6 +166,13 @@ def plan_tools(state: GraphState) -> Dict[str, Any]:
     need_weather = plan.need_weather or hint_weather(msg)
     need_country = plan.need_country or hint_country_facts(msg)
     need_web = (plan.need_web or hint_web_search(msg)) and web_allowed
+
+    if not need_weather and _is_weather_followup(state, msg):
+        need_weather = True
+
+    print(f"DEBUG: msg='{msg}'")
+    print(f"DEBUG: plan.need_weather={plan.need_weather}, hint_weather={hint_weather(msg)}, final need_weather={need_weather}")
+    print(f"DEBUG: place={place}")
 
     data_plan = {"weather": need_weather, "country": need_country, "web": need_web, "place": place}
     new_data = deep_merge(data_block, {"plan": data_plan, "web_allowed": web_allowed})
@@ -210,7 +226,7 @@ def fetch_data(state: GraphState) -> Dict[str, Any]:
     data_in = state.get("data") or {}
     plan = data_in.get("plan") or {}
 
-    facts = {"now": now_iso(), "today": today_str(), "weather_by_place": {}}
+    facts = {"now": now_iso(), "today": today(), "weather_by_place": {}}
     profile_update: Dict[str, Any] = {}
 
     place_to_use = plan.get("place") or data_in.get("resolved_place")
@@ -219,25 +235,42 @@ def fetch_data(state: GraphState) -> Dict[str, Any]:
     country_code = None
 
     if plan.get("weather") and place_to_use:
+        print(f"DEBUG: Attempting to fetch weather for: {place_to_use}")
+        print(f"DEBUG: plan.get('weather') = {plan.get('weather')}")
         g = geocode(place_to_use)
-        country_code = g.get("country_code") or g.get("country")
+        print(f"DEBUG: geocode result: {g}")
+        country_code = g.get("country_code") or g.get("country") if g else None
         if g:
             units = data_in.get("units", "metric")
+            print(f"DEBUG: Calling forecast_daily with lat={g['lat']}, lon={g['lon']}, units={units}")
             wx = forecast_daily(g["lat"], g["lon"], units=units)
+            print(f"DEBUG: Weather forecast result keys: {list(wx.keys()) if wx else None}")
             facts["weather_by_place"][g["name"]] = {"place": g, "forecast": wx}
             facts["weather_current"] = g["name"]
             place_tz = wx.get("timezone")
             if place_tz:
-                facts["today"] = today_in_zone(place_tz)
+                facts["today"] = today(place_tz)
             profile_update = remember_place(state, g["name"])
+        else:
+            print(f"DEBUG: geocode returned None for place: {place_to_use}")
 
     if plan.get("country") and place_to_use:
-        cf = country_facts(place_to_use)
-        if cf:
-            facts["country"] = cf
-            country_code = country_code or cf.get("iso2") or cf.get("cca2") or cf.get("code")
-            if not profile_update:
-                profile_update = remember_place(state, cf["name"])
+        # Try to get country name from the message if available
+        country_name, city_name = resolve_country_and_city(state)
+        country_to_lookup = country_name or place_to_use
+        
+        try:
+            cf = country_facts(country_to_lookup)
+            if cf:
+                facts["country"] = cf
+                country_code = country_code or cf.get("iso2") or cf.get("cca2") or cf.get("code")
+                if not profile_update:
+                    profile_update = remember_place(state, cf["name"])
+            else:
+                print(f"DEBUG: country_facts returned None for: {country_to_lookup}")
+        except Exception as e:
+            print(f"DEBUG: country_facts failed for {country_to_lookup}: {e}")
+            # Continue without country facts rather than crashing
 
     if plan.get("web"):
         res = web_search(state["user_msg"], max_results=4)
@@ -281,7 +314,9 @@ def fetch_data(state: GraphState) -> Dict[str, Any]:
 
 def compose_answer(state: GraphState) -> Dict[str, Any]:
     facts = state.get("data", {}).get("facts", {}) or {}
-    now = facts.get("now", "")
+    now_raw = facts.get("now", "")
+    # Clean up the timestamp - just show the date
+    now_clean = now_raw.split("T")[0] if "T" in now_raw else now_raw
     place_for_answer = resolve_place(state)
 
     facts_brief = ""
@@ -304,9 +339,9 @@ def compose_answer(state: GraphState) -> Dict[str, Any]:
                 parts.append(seg)
         if parts:
             if len(parts) == 1:
-                facts_brief += f"As of {now}, {place} {parts[0]}. "
+                facts_brief += f"Weather for {place}: {parts[0]}. "
             else:
-                facts_brief += f"As of {now}, {place} — " + "; ".join(parts) + ". "
+                facts_brief += f"Weather for {place}: " + "; ".join(parts) + ". "
     elif facts.get("weather_current") and wbp.get(facts["weather_current"]):
         other = facts["weather_current"]
         if place_for_answer and other.lower() != place_for_answer.lower():
@@ -332,7 +367,7 @@ def compose_answer(state: GraphState) -> Dict[str, Any]:
         recent=recent_pairs or "(none)",
         checklist=REASONING_CHECKLIST,
         user_msg=state["user_msg"],
-        now=now or "now",
+        now=now_clean or "now",
     )
 
     res = chat_completion_structured(
@@ -341,7 +376,7 @@ def compose_answer(state: GraphState) -> Dict[str, Any]:
             {"role": "user", "content": user_prompt},
         ],
         schema=ComposeOut,
-        temperature=0.2,
+        temperature=0.0,
     )
 
     draft = res.answer

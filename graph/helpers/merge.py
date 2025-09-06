@@ -1,4 +1,3 @@
-from turtle import st
 from typing import Dict,Any
 
 def deep_merge(a: Dict[str,Any], b: Dict[str,Any]) -> Dict[str,Any]:
@@ -7,7 +6,7 @@ def deep_merge(a: Dict[str,Any], b: Dict[str,Any]) -> Dict[str,Any]:
     Non-dict values get replaced. Safe for LangGraph's shallow state merge.
     """
     out = dict(a or {})
-    for k, v in (b or {}).items:
+    for k, v in (b or {}).items():
         if isinstance(v,dict) and isinstance(out.get(k), dict):
             out[k] = deep_merge(out[k],v)
         else:
