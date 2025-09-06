@@ -20,6 +20,7 @@ from .tools.clock import now_iso, today
 from .tools.weather import geocode, forecast_daily
 from .tools.countries import country_facts
 from .tools.tavily import web_search
+from .tools.location import get_location_from_ip, geocode_location, calculate_distance, get_travel_time_estimate
 
 #helpers
 from .helpers.merge import deep_merge
@@ -138,6 +139,23 @@ def resolve_place_llm(state: GraphState) -> dict:
 
     return {"data": data}
 
+def resolve_user_location(state: GraphState) -> Dict[str, Any]:
+    """Resolve and geocode the user's current location."""
+    profile = state.get("user_profile", {})
+    
+    # Check if we already have location data
+    if "location_data" in profile:
+        return {}
+    
+    # Try to get location from IP if not already detected
+    location_data = get_location_from_ip()
+    if location_data:
+        profile["current_location"] = location_data["location_string"]
+        profile["location_data"] = location_data
+        return {"user_profile": profile}
+    
+    return {}
+
 def _is_weather_followup(state: Dict[str, Any], msg: str) -> bool:
     m = (msg or "").lower().strip()
     
@@ -182,13 +200,22 @@ def plan_tools(state: GraphState) -> Dict[str, Any]:
     if not need_weather and _is_weather_followup(state, msg):
         need_weather = True
 
+    # Check if user is asking about distance-based recommendations
+    msg_lower = msg.lower()
+    distance_queries = ["hours away", "distance", "near me", "close to me", "nearby", "from here"]
+    has_distance_query = any(phrase in msg_lower for phrase in distance_queries)
+    
+    # If asking about distance, we need location data
+    need_location = has_distance_query and not (state.get("user_profile", {}).get("location_data"))
+
     print(f"DEBUG: msg='{msg}'")
     print(f"DEBUG: plan.need_weather={plan.need_weather}, hint_weather={hint_weather(msg)}, final need_weather={need_weather}")
     print(f"DEBUG: place={place}")
     print(f"DEBUG: llm_resolved={llm_resolved}")
     print(f"DEBUG: resolve_place(state)={resolve_place(state)}")
+    print(f"DEBUG: has_distance_query={has_distance_query}, need_location={need_location}")
 
-    data_plan = {"weather": need_weather, "country": need_country, "web": need_web, "place": place}
+    data_plan = {"weather": need_weather, "country": need_country, "web": need_web, "place": place, "location": need_location}
     new_data = deep_merge(data_block, {"plan": data_plan, "web_allowed": web_allowed})
     return {"data": new_data}
 
@@ -370,6 +397,12 @@ def compose_answer(state: GraphState) -> Dict[str, Any]:
     if "country" in facts:
         cf = facts["country"]
         facts_brief += f"Country: {cf['name']}, capital {cf['capital']}, currency {', '.join(cf['currencies'])}. "
+
+    # Add location context for distance-based queries
+    profile = state.get("user_profile", {})
+    location_data = profile.get("location_data")
+    if location_data:
+        facts_brief += f"User location: {location_data['location_string']} (lat: {location_data['latitude']:.2f}, lon: {location_data['longitude']:.2f}). "
 
     # Only include web sources for non-weather responses
     intent = state.get("intent", "")

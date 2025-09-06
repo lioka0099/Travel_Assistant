@@ -2,6 +2,7 @@ import os
 import streamlit as st
 from graph import build_graph
 from graph.state import GraphState
+from graph.tools.location import get_location_from_ip
 
 # ---------- 1) App setup ----------
 st.set_page_config(page_title="Travel Assistant", page_icon="🧭", layout="centered")
@@ -20,22 +21,41 @@ for key, default in [
     ("user_profile", {}),         # destinations MRU, dates, style, etc.
     ("data", {}),                 # tool facts, caches, flags (web_allowed, units), etc.
     ("web_allowed", True),        # UI toggle
-    ("units", "metric"),          # UI toggle (metric/imperial)
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
+
+# Auto-detect user location on first load
+if "location_detected" not in st.session_state:
+    with st.spinner("Detecting your location..."):
+        location_data = get_location_from_ip()
+        if location_data:
+            st.session_state.user_profile["current_location"] = location_data["location_string"]
+            st.session_state.user_profile["location_data"] = location_data
+            st.session_state["location_detected"] = True
+            st.success(f"🧭 Detected location: {location_data['location_string']}")
+        else:
+            st.session_state["location_detected"] = True
+            st.warning("Could not detect your location. You can still use the travel assistant!")
 
 # ---------- 3) Controls ----------
 col1, col2, col3 = st.columns([1,1,1])
 with col1:
     st.session_state.web_allowed = st.toggle("Allow web (Tavily)", value=st.session_state.web_allowed)
 with col2:
-    st.session_state.units = st.selectbox("Units", ["metric", "imperial"], index=0 if st.session_state.units=="metric" else 1)
+    # Add location input
+    current_location = st.text_input("Your location", value=st.session_state.user_profile.get("current_location", ""), placeholder="e.g., New York, NY")
+    if current_location and current_location != st.session_state.user_profile.get("current_location", ""):
+        st.session_state.user_profile["current_location"] = current_location
 with col3:
     if st.button("Reset conversation", type="secondary"):
         for k in ["history", "intent", "offtopic_count", "summary", "user_profile", "data"]:
             st.session_state[k] = [] if k=="history" else {} if k in ("user_profile","data") else 0 if k=="offtopic_count" else ""
         st.toast("Conversation cleared.", icon="🧹")
+
+# Show detected location
+if st.session_state.user_profile.get("current_location"):
+    st.info(f"🧭 Your location: {st.session_state.user_profile['current_location']}")
 
 # ---------- 4) Chat transcript ----------
 for msg in st.session_state.history:
@@ -56,7 +76,7 @@ if user_msg:
         "user_msg": user_msg,
         "user_profile": st.session_state.user_profile,
         "summary": st.session_state.summary,
-        "data": {**(st.session_state.data or {}), "web_allowed": st.session_state.web_allowed, "units": st.session_state.units},
+        "data": {**(st.session_state.data or {}), "web_allowed": st.session_state.web_allowed, "units": "metric"},
         "intent": st.session_state.intent,
         "offtopic_count": st.session_state.offtopic_count,
     }

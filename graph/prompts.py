@@ -6,6 +6,7 @@ Rules:
 - Lead with a 1-sentence summary, then bullets (≤6).
 - Use external data only when provided; do NOT invent hours/prices.
 - Ask at most one clarification question only when necessary.
+- When user asks about places "near me" or "X hours away", use their current location if available.
 """
 
 STRICT_JSON_FOOTER = """
@@ -32,11 +33,12 @@ Rules:
 2) If the user_msg contains pack/packing/clothes/what to wear ⇒ "packing".
 3) If the user_msg asks about things to do/see/museums/attractions ⇒ "attractions".
 4) If the user_msg asks about transport/visa/currency/hours/open/closed/tickets ⇒ "logistics".
-5) If the message is a short acknowledgement (e.g., "ok", "thanks", "thank you", "got it", "perfect") ⇒ "smalltalk".
-6) If user_msg is a short follow-up (≤ 5 tokens) AND prior_intent is "weather" AND NOT an acknowledgement ⇒ keep "weather".
-7) If user_msg is a short follow-up (≤ 5 tokens) AND prior_intent is not "smalltalk" AND NOT an acknowledgement ⇒ keep prior_intent unless rule (1) picks "weather".
-8) If has_travel_context is true, do NOT choose "smalltalk".
-9) Only choose "smalltalk" if the message is clearly chit-chat and none of the above rules apply.
+5) If the user_msg asks about places "near me", "X hours away", "close to me", or distance-based recommendations ⇒ "destinations".
+6) If the message is a short acknowledgement (e.g., "ok", "thanks", "thank you", "got it", "perfect") ⇒ "smalltalk".
+7) If user_msg is a short follow-up (≤ 5 tokens) AND prior_intent is "weather" AND NOT an acknowledgement ⇒ keep "weather".
+8) If user_msg is a short follow-up (≤ 5 tokens) AND prior_intent is not "smalltalk" AND NOT an acknowledgement ⇒ keep prior_intent unless rule (1) picks "weather".
+9) If has_travel_context is true, do NOT choose "smalltalk".
+10) Only choose "smalltalk" if the message is clearly chit-chat and none of the above rules apply.
 
 - Return ONLY the intent word.
 User: {user_msg}
