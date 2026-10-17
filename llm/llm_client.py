@@ -40,7 +40,7 @@ def _to_lc_message(m:Dict):
     return AIMessage(content=content)
 
 def _chat(model: str | None = None, temperature: float = 0.2) -> ChatGroq:
-    model_name = model or os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant"
+    model_name = model or os.getenv("GROQ_MODEL") or "openai/gpt-oss-20b"
     
     # Get LangSmith tracer
     tracer = _get_langsmith_tracer()
