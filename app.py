@@ -74,9 +74,11 @@ WELCOME = """
 
 def md(text: str) -> str:
     """Make text safe for st.markdown: drop images, keeping their alt text (an image URL is fetched on
-    render, so one injected via a web result could leak the user's data; the replace catches
-    reference-style images), and escape $ so prices like '$20 to $30' aren't rendered as LaTeX."""
-    text = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", text).replace("![", "[")
+    render, so one injected via a web result could leak the user's data; the second pass turns every
+    "![" left, with its whole run of "!", into a plain "[", which catches reference-style images and
+    alt text with brackets), and escape $ so prices like '$20 to $30' aren't rendered as LaTeX."""
+    text = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"!+\[", "[", text)
     return text.replace("$", r"\$")
 
 
