@@ -15,8 +15,8 @@ flowchart LR
     T --> A
     A -- draft --> R{reviewer<br/>Qwen 3.8 27B}
     R -- approved --> F([Answer])
-    R -- “issues, under 3 reviews” --> A
-    R -- “issues, 3rd review” --> N([Answer + ⚠️ note])
+    R -- "issues, under 3 reviews" --> A
+    R -- "issues, 3rd review" --> N([Answer + ⚠️ note])
 ```
 
 1. **Agent loop.** The agent model has six tools bound to it. It calls tools until it has what it needs, then writes a draft. Nothing in the code decides which tools to use; the model does.
@@ -26,7 +26,7 @@ flowchart LR
    - nothing is invented;
    - ambiguity is handled;
    - the answer stays on travel.
-3. **Bounded revisions.** Rejected drafts go back to the agent with the reviewer's feedback, and every revision is reviewed again, up to 3 reviews per message. If the last review still finds problems, the answer ships with an honest “⚠️ I couldn't double-check: …” note. If the reviewer model itself is unavailable, the draft is shown marked “⚠️ I couldn't double-check this answer.”
+3. **Bounded revisions.** Rejected drafts go back to the agent with the reviewer's feedback, and every revision is reviewed again, up to 3 reviews per message. If the last review still finds problems, the answer ships with an honest "⚠️ I couldn't double-check: …" note. If the reviewer model itself is unavailable, the draft is shown marked "⚠️ I couldn't double-check this answer."
 4. **Memory.** Conversation memory lives in LangGraph's checkpointer, one thread per browser session.
 
 The whole graph is one file of about 100 lines: [`graph/agent.py`](graph/agent.py).
@@ -48,9 +48,9 @@ Tool failures (a timeout, a service outage) come back to the agent as error mess
 
 The chat UI was designed against [Nielsen's 10 usability heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/):
 
-- **Live status in plain words** while the agent works (“Checking drive time to Haifa…”), never function names.
-- **”How I got this”** under each answer: the steps taken, whether it was double-checked, and the sources. It's collapsed by default.
-- **Clickable example questions**, a “What can I ask?” help popover, a New chat button and a visible location badge.
+- **Live status in plain words** while the agent works ("Checking drive time to Haifa…"), never function names.
+- **"How I got this"** under each answer: the steps taken, whether it was double-checked, and the sources. It's collapsed by default.
+- **Clickable example questions**, a "What can I ask?" help popover, a New chat button and a visible location badge.
 - **Errors in plain language**, with a Try again button.
 - **Travel only.** Off-topic requests get a polite decline with an example question; this is enforced by both the agent's instructions and the reviewer.
 
@@ -84,8 +84,8 @@ The tests run offline in about 2 seconds. Scripted fake models drive every path 
 
 ## Screenshots
 
-<div align=”center”>
-  <img src=”screenshots/1.png” alt=”Home screen” width=”900”/>
-  <img src=”screenshots/3.png” alt=”Nearby destinations based on user location” width=”900”/>
-  <img src=”screenshots/4.png” alt=”Weather by date” width=”900”/>
+<div align="center">
+  <img src="screenshots/1.png" alt="Home screen" width="900"/>
+  <img src="screenshots/3.png" alt="Nearby destinations based on user location" width="900"/>
+  <img src="screenshots/4.png" alt="Weather by date" width="900"/>
 </div>
