@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 
 from langchain_core.language_models import BaseChatModel
@@ -13,6 +14,8 @@ from .tools import TOOLS
 MAX_REVIEWS = 3  # first draft + up to 2 revisions
 HISTORY_LIMIT = 30  # messages sent to the agent model; the checkpoint keeps everything
 REVIEWER = "reviewer"  # name on feedback messages, so they aren't mistaken for the user's question
+
+logger = logging.getLogger(__name__)
 
 
 class Review(BaseModel):
@@ -42,8 +45,12 @@ def build_graph(agent_model: BaseChatModel, review_model: BaseChatModel):
 
     def agent(state: AgentState) -> dict:
         system = SystemMessage(AGENT_SYSTEM.format(today=f"{date.today():%A, %Y-%m-%d}"))
-        history = trim_messages(state["messages"], max_tokens=HISTORY_LIMIT, token_counter=len, start_on="human")
-        return {"messages": [agent_llm.invoke([system, *history])]}
+        messages = state["messages"]
+        _, turn = current_turn(messages)
+        start = max(len(messages) - len(turn) - 1, 0)  # index of the user's latest question
+        # Trim only earlier turns: the current question and its tool results must always reach the model.
+        earlier = trim_messages(messages[:start], max_tokens=HISTORY_LIMIT, token_counter=len, start_on="human")
+        return {"messages": [agent_llm.invoke([system, *earlier, *messages[start:]])]}
 
     def after_agent(state: AgentState) -> str:
         return "tools" if state["messages"][-1].tool_calls else "reviewer"
@@ -53,18 +60,23 @@ def build_graph(agent_model: BaseChatModel, review_model: BaseChatModel):
         draft = state["messages"][-1].content
         tool_results = "\n".join(m.content for m in turn if isinstance(m, ToolMessage)) or "(no tools were called)"
         previous = "\n".join(f"- {i}" for i in state.get("review_issues") or []) or "(first review)"
-        review = review_llm.invoke(
-            [
-                SystemMessage(REVIEW_SYSTEM),
-                HumanMessage(
-                    f"Question:\n{question.content if question else ''}\n\n"
-                    f"Tool results:\n{tool_results}\n\n"
-                    f"Previous issues:\n{previous}\n\n"
-                    f"Draft:\n{draft}"
-                ),
-            ]
-        )
         count = state.get("review_count", 0) + 1
+        try:
+            review = review_llm.invoke(
+                [
+                    SystemMessage(REVIEW_SYSTEM),
+                    HumanMessage(
+                        f"Question:\n{question.content if question else ''}\n\n"
+                        f"Tool results:\n{tool_results}\n\n"
+                        f"Previous issues:\n{previous}\n\n"
+                        f"Draft:\n{draft}"
+                    ),
+                ]
+            )
+        except Exception:  # reviewer unavailable (e.g. rate limit): show the draft, clearly marked as unchecked
+            logger.warning("Review failed; showing the draft unchecked", exc_info=True)
+            note = "\n\n⚠️ I couldn't double-check this answer."
+            return {"review_count": count, "review_issues": ["review unavailable"], "final_answer": draft + note}
         if review.approved:
             return {"review_count": count, "review_issues": [], "final_answer": draft}
         issues = review.issues or ["parts of this answer"]

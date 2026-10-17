@@ -102,3 +102,22 @@ def test_new_turn_resets_review_state():
     assert out["review_count"] == 1
     assert "(first review)" in reviewer.calls[2][1].content
     assert "second question" in reviewer.calls[2][1].content
+
+
+def test_long_turn_keeps_the_question_in_agent_input():
+    # 18 tool calls make the turn longer than HISTORY_LIMIT; the question must still reach the agent.
+    calls = [call("get_local_time", {"timezone": "Asia/Tokyo"}, id=f"call_{i}") for i in range(18)]
+    agent = ScriptedModel(script=[*calls, AIMessage("Done.")])
+    reviewer = ScriptedModel(script=[ok()])
+    run(build_graph(agent, reviewer), "Plan my trip")
+    last_input = agent.calls[-1]
+    assert any(isinstance(m, HumanMessage) and m.content == "Plan my trip" for m in last_input)
+    assert sum(isinstance(m, ToolMessage) for m in last_input) == 18
+
+
+def test_reviewer_failure_shows_draft_marked_unchecked():
+    agent = ScriptedModel(script=[AIMessage("Pack layers.")])
+    reviewer = ScriptedModel(script=[RuntimeError("rate limited")])
+    out = run(build_graph(agent, reviewer), "What should I pack?")
+    assert out["final_answer"] == "Pack layers.\n\n⚠️ I couldn't double-check this answer."
+    assert out["review_issues"] == ["review unavailable"]
