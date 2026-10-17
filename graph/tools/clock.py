@@ -1,16 +1,14 @@
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-DEFAULT_TIMEZONE = "Asia/Jerusalem"
+from langchain_core.tools import tool
 
-def now_iso(tz: str = DEFAULT_TIMEZONE) -> str:
-    return datetime.now(ZoneInfo(tz)).isoformat(timespec="seconds")
 
-def today(tz: str | None = None) -> str:
-    tz = tz or DEFAULT_TIMEZONE
+@tool
+def get_local_time(timezone: str) -> dict:
+    """Current local date and time in an IANA timezone, e.g. 'Asia/Tokyo' or 'Europe/Paris'."""
     try:
-        return datetime.now(ZoneInfo(tz)).date().isoformat()
-    except ZoneInfoNotFoundError:
-        # fallback to default if an invalid tz was passed
-        return datetime.now(ZoneInfo(DEFAULT_TIMEZONE)).date().isoformat()
+        now = datetime.now(ZoneInfo(timezone))
+    except (ZoneInfoNotFoundError, ValueError):
+        return {"summary": f"Unknown timezone {timezone}"}
+    return {"summary": f"Time in {timezone}: {now:%H:%M, %A %d %B}", "local_time": now.isoformat(timespec="minutes")}
