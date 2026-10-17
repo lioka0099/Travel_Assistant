@@ -4,6 +4,7 @@ import uuid
 from urllib.parse import urlparse
 
 import groq
+import openai
 import streamlit as st
 from langchain_core.messages import HumanMessage
 from langgraph.errors import GraphRecursionError
@@ -95,13 +96,14 @@ def progress_line(tool_call: dict) -> str:
 
 def friendly_error(e: Exception) -> str:
     """Plain-language error message (#9)."""
-    if isinstance(e, groq.RateLimitError):
+    if isinstance(e, (groq.RateLimitError, openai.RateLimitError)):
         return "The AI service is busy right now. Wait a moment and try again."
-    if isinstance(e, groq.AuthenticationError):
+    if isinstance(e, (groq.AuthenticationError, openai.AuthenticationError)):
         return "The AI service isn't set up correctly (API key problem)."
-    if isinstance(e, groq.APIStatusError) and e.status_code == 413:  # request too large
+    too_long = isinstance(e, groq.APIStatusError) and e.status_code == 413  # request too large
+    if too_long or (isinstance(e, openai.BadRequestError) and "context_length_exceeded" in str(e)):
         return "This conversation has gotten too long for the AI service. Start a new chat to continue."
-    if "model_decommissioned" in str(e) or "model_not_found" in str(e):
+    if isinstance(e, openai.NotFoundError) or "model_decommissioned" in str(e) or "model_not_found" in str(e):
         return "The AI model this app uses is no longer available. The app needs its model setting updated."
     if isinstance(e, GraphRecursionError):
         return "I got stuck working on that one. Try rephrasing your question."
@@ -200,8 +202,8 @@ st.markdown(CSS, unsafe_allow_html=True)
 if "graph" not in st.session_state:
     try:
         st.session_state.graph = build_graph(make_agent_model(), make_review_model())
-    except groq.GroqError as e:
-        st.error("The AI service isn't set up: the GROQ_API_KEY setting is missing.", icon="⚠️")
+    except (openai.OpenAIError, groq.GroqError) as e:  # raised when an API key is missing
+        st.error("The AI service isn't set up: an API key setting is missing.", icon="⚠️")
         with st.expander("Technical details"):
             st.code(f"{type(e).__name__}: {e}", language=None)
         st.stop()

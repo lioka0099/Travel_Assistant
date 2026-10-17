@@ -6,6 +6,7 @@ import requests
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 
 from fakes import ScriptedModel
 from graph import build_graph
@@ -136,8 +137,8 @@ def test_reviewer_failure_shows_draft_marked_unchecked():
 
 
 def test_interrupted_turn_leaves_no_unanswered_tool_call():
-    # A Streamlit rerun can cut a turn off right after the agent asks for a tool. Groq rejects a
-    # history with an unanswered tool call, so the next turn must not send it.
+    # A Streamlit rerun can cut a turn off right after the agent asks for a tool. The model API
+    # rejects a history with an unanswered tool call, so the next turn must not send it.
     agent = ScriptedModel(script=[call("get_user_location", {}), AIMessage("You're in Tel Aviv.")])
     reviewer = ScriptedModel(script=[ok()])
     graph = build_graph(agent, reviewer)
@@ -162,22 +163,27 @@ def test_review_is_retried_once():
 
 
 def test_real_models_get_tools_and_a_json_schema(monkeypatch):
-    # The fakes ignore binding, so check what the real Groq models would be sent, without calling Groq.
+    # The fakes ignore binding, so check what the real models would be sent, without calling OpenAI or Groq.
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
-    monkeypatch.delenv("GROQ_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
     monkeypatch.delenv("GROQ_REVIEW_MODEL", raising=False)
     sent = []
 
     def fake_generate(self, messages, stop=None, run_manager=None, **kwargs):
-        sent.append((self.model_name, kwargs))
+        sent.append((self, kwargs))
         reply = '{"approved": true, "issues": []}' if "response_format" in kwargs else "Pack layers."
         return ChatResult(generations=[ChatGeneration(message=AIMessage(reply))])
 
+    monkeypatch.setattr(ChatOpenAI, "_generate", fake_generate)
     monkeypatch.setattr(ChatGroq, "_generate", fake_generate)
     out = run(build_graph(make_agent_model(), make_review_model()), "What should I pack?")
     (agent_model, agent_kwargs), (review_model, review_kwargs) = sent
-    assert agent_model == AGENT_MODEL and review_model == REVIEW_MODEL
+    assert isinstance(agent_model, ChatOpenAI) and agent_model.model_name == AGENT_MODEL == "gpt-5.4-mini"
+    assert agent_model.reasoning_effort == "none"  # GPT-5.4 tools on chat completions need it
     assert [t["function"]["name"] for t in agent_kwargs["tools"]] == [t.name for t in TOOLS]
+    assert isinstance(review_model, ChatGroq) and review_model.model_name == REVIEW_MODEL == "qwen/qwen3.8-27b"
+    assert review_model.max_tokens == 400  # under Qwen's free-tier cap of 1,000 output tokens a minute
     response_format = review_kwargs["response_format"]
     assert response_format["type"] == "json_schema"
     assert "strict" not in response_format["json_schema"]  # Groq only honours strict for gpt-oss models

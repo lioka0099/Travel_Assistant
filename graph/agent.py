@@ -58,7 +58,7 @@ def build_graph(agent_model: BaseChatModel, review_model: BaseChatModel):
         _, turn = current_turn(messages)
         start = max(len(messages) - len(turn) - 1, 0)  # index of the user's latest question
         # A turn cut off mid-way (e.g. by a Streamlit rerun) can leave a tool call with no result,
-        # which Groq rejects on every later call, so drop those.
+        # which the model API rejects on every later call, so drop those.
         answered = {m.tool_call_id for m in messages[:start] if isinstance(m, ToolMessage)}
         earlier = [m for m in messages[:start] if not isinstance(m, AIMessage) or all(c["id"] in answered for c in m.tool_calls)]
         # Trim only earlier turns: the current question and its tool results must always reach the model.

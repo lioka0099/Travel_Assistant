@@ -1,5 +1,6 @@
 import groq
 import httpx
+import openai
 import pytest
 from langchain_core.messages import AIMessage
 from langgraph.errors import GraphRecursionError
@@ -7,6 +8,7 @@ from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
 from streamlit.runtime.scriptrunner_utils.script_requests import RerunData
 from streamlit.testing.v1 import AppTest
 
+import llm.llm_client  # noqa: F401  loads .env now, so a key a test removes stays removed when app.py runs
 from fakes import ScriptedModel
 from graph import build_graph
 from graph.agent import Review
@@ -113,21 +115,32 @@ def test_fix_round_without_tools_has_no_step_count():
     assert expander.markdown[0].value == "✓ Double-checked the answer against this data (fixed 1 detail)"
 
 
-def groq_error(cls, status):
-    return cls(f"Error code: {status}", response=httpx.Response(status, request=httpx.Request("POST", "https://x")), body=None)
+def api_error(cls, status, detail=""):
+    response = httpx.Response(status, request=httpx.Request("POST", "https://x"))
+    return cls(f"Error code: {status}{detail}", response=response, body=None)
 
 
 @pytest.mark.parametrize(
     "error, message",
     [
-        (groq_error(groq.RateLimitError, 429), "The AI service is busy right now. Wait a moment and try again."),
-        (groq_error(groq.AuthenticationError, 401), "The AI service isn't set up correctly (API key problem)."),
+        (api_error(groq.RateLimitError, 429), "The AI service is busy right now. Wait a moment and try again."),
+        (api_error(groq.AuthenticationError, 401), "The AI service isn't set up correctly (API key problem)."),
         (
-            groq_error(groq.APIStatusError, 413),
+            api_error(groq.APIStatusError, 413),
             "This conversation has gotten too long for the AI service. Start a new chat to continue.",
         ),
         (
             RuntimeError("Error code: 404 - model_not_found"),
+            "The AI model this app uses is no longer available. The app needs its model setting updated.",
+        ),
+        (api_error(openai.RateLimitError, 429), "The AI service is busy right now. Wait a moment and try again."),
+        (api_error(openai.AuthenticationError, 401), "The AI service isn't set up correctly (API key problem)."),
+        (
+            api_error(openai.BadRequestError, 400, " - {'error': {'code': 'context_length_exceeded'}}"),
+            "This conversation has gotten too long for the AI service. Start a new chat to continue.",
+        ),
+        (
+            api_error(openai.NotFoundError, 404),
             "The AI model this app uses is no longer available. The app needs its model setting updated.",
         ),
         (GraphRecursionError("Recursion limit of 40 reached"), "I got stuck working on that one. Try rephrasing your question."),
@@ -138,3 +151,13 @@ def test_errors_are_explained_in_plain_language(error, message):
     at = start([error], [])
     at.chat_input[0].set_value("hello").run()
     assert at.error[0].value == message
+
+
+@pytest.mark.parametrize("missing", ["OPENAI_API_KEY", "GROQ_API_KEY"])
+def test_missing_api_key_shows_a_setup_message(monkeypatch, missing):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.delenv(missing)
+    at = AppTest.from_file("../app.py", default_timeout=30).run()  # no fakes: the app builds the real models
+    assert at.error[0].value == "The AI service isn't set up: an API key setting is missing."
+    assert missing in at.code[0].value  # the technical details name the setting

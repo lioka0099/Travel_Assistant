@@ -10,7 +10,7 @@ A travel-planning chat assistant built with LangGraph and Streamlit. The agent d
 
 ```mermaid
 flowchart LR
-    U([User message]) --> A[agent<br/>gpt-oss-20b + tools]
+    U([User message]) --> A[agent<br/>OpenAI gpt-5.4-mini + tools]
     A -- tool call --> T[tools]
     T --> A
     A -- draft --> R{reviewer<br/>Qwen 3.8 27B}
@@ -20,7 +20,7 @@ flowchart LR
 ```
 
 1. **Agent loop.** The agent model has six tools bound to it. It calls tools until it has what it needs, then writes a draft. Nothing in the code decides which tools to use; the model does. After 12 tool results for one message, the agent gets no more tools and must answer with what it has.
-2. **Cross-model review.** A reviewer from a different model family (Alibaba's Qwen vs OpenAI's gpt-oss) checks the draft. It also gets today's date and the previous question and answer, so follow-ups make sense. It checks that:
+2. **Cross-model review.** A reviewer from a different company (Alibaba's Qwen on Groq vs OpenAI's gpt-5.4-mini agent) checks the draft. It also gets today's date and the previous question and answer, so follow-ups make sense. It checks that:
    - every fact matches the tool results;
    - the question is answered;
    - nothing is invented;
@@ -29,7 +29,7 @@ flowchart LR
 3. **Bounded revisions.** Rejected drafts go back to the agent with the reviewer's feedback, and every revision is reviewed again, up to 3 reviews per message. If the last review still finds problems, the answer ships with an honest "⚠️ I couldn't double-check: …" note. If the reviewer model itself is unavailable (after one retry), the draft is shown marked "⚠️ I couldn't double-check this answer."
 4. **Memory.** Conversation memory lives in LangGraph's checkpointer, one thread per browser session.
 
-The whole graph is one file of about 130 lines: [`graph/agent.py`](graph/agent.py).
+The whole graph is one file of about 140 lines: [`graph/agent.py`](graph/agent.py).
 
 ## Tools
 
@@ -68,10 +68,11 @@ Settings go in a `.env` file or in Streamlit secrets:
 
 | Variable | Purpose |
 |---|---|
-| `GROQ_API_KEY` | Required. LLM calls via Groq |
-| `TAVILY_API_KEY` | Enables web search |
-| `GROQ_MODEL` | Agent model; defaults to `openai/gpt-oss-20b` |
+| `OPENAI_API_KEY` | Required. Agent model calls via OpenAI |
+| `OPENAI_MODEL` | Agent model; defaults to `gpt-5.4-mini` |
+| `GROQ_API_KEY` | Required. Reviewer model calls via Groq |
 | `GROQ_REVIEW_MODEL` | Reviewer model; defaults to `qwen/qwen3.8-27b` |
+| `TAVILY_API_KEY` | Enables web search |
 | `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` | Optional LangSmith tracing (`LANGSMITH_TRACING=true`) |
 
 ## Tests
