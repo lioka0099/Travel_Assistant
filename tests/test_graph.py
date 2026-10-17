@@ -27,10 +27,16 @@ def reject(*issues):
     return Review(approved=False, issues=list(issues))
 
 
+def config(thread="t1", location=None):
+    return {"configurable": {"thread_id": thread, "user_location": location}, "recursion_limit": 40}
+
+
+def inputs(text):
+    return {"messages": [HumanMessage(text)], "review_count": 0, "review_issues": [], "final_answer": ""}
+
+
 def run(graph, text, thread="t1", location=None):
-    config = {"configurable": {"thread_id": thread, "user_location": location}, "recursion_limit": 40}
-    inputs = {"messages": [HumanMessage(text)], "review_count": 0, "review_issues": [], "final_answer": ""}
-    return graph.invoke(inputs, config)
+    return graph.invoke(inputs(text), config(thread, location))
 
 
 def test_answer_without_tools_is_approved_first_time():
@@ -121,3 +127,19 @@ def test_reviewer_failure_shows_draft_marked_unchecked():
     out = run(build_graph(agent, reviewer), "What should I pack?")
     assert out["final_answer"] == "Pack layers.\n\n⚠️ I couldn't double-check this answer."
     assert out["review_issues"] == ["review unavailable"]
+
+
+def test_interrupted_turn_leaves_no_unanswered_tool_call():
+    # A Streamlit rerun can cut a turn off right after the agent asks for a tool. Groq rejects a
+    # history with an unanswered tool call, so the next turn must not send it.
+    agent = ScriptedModel(script=[call("get_user_location", {}), AIMessage("You're in Tel Aviv.")])
+    reviewer = ScriptedModel(script=[ok()])
+    graph = build_graph(agent, reviewer)
+    for _ in graph.stream(inputs("Where am I?"), config(location=TEL_AVIV), stream_mode="updates"):
+        break  # stop right after the agent's tool-call update
+    assert graph.get_state(config()).next == ("tools",)
+    out = run(graph, "Where am I?", location=TEL_AVIV)
+    answered = {m.tool_call_id for m in agent.calls[-1] if isinstance(m, ToolMessage)}
+    asked = [c["id"] for m in agent.calls[-1] if isinstance(m, AIMessage) for c in m.tool_calls]
+    assert all(i in answered for i in asked)
+    assert out["final_answer"] == "You're in Tel Aviv."

@@ -1,4 +1,6 @@
 from langchain_core.messages import AIMessage
+from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
+from streamlit.runtime.scriptrunner_utils.script_requests import RerunData
 from streamlit.testing.v1 import AppTest
 
 from fakes import ScriptedModel
@@ -60,3 +62,14 @@ def test_new_chat_clears_conversation():
     next(b for b in at.button if b.label == "New chat").click().run()
     assert at.session_state["chat"] == []
     assert at.session_state["thread_id"] != old_thread
+
+
+def test_turn_interrupted_by_a_rerun_is_finished_on_the_next_run():
+    # e.g. the browser answering the location prompt reruns the script in the middle of a turn
+    location_call = AIMessage(content="", tool_calls=[{"name": "get_user_location", "args": {}, "id": "c1"}])
+    rerun = RerunException(RerunData())
+    at = start([location_call, rerun, AIMessage("You're in Tel Aviv.")], [Review(approved=True, issues=[])])
+    at.chat_input[0].set_value("Where am I?").run()
+    assert not at.exception
+    assert [t["role"] for t in at.session_state["chat"]] == ["user", "assistant"]
+    assert at.chat_message[-1].markdown[0].value == "You're in Tel Aviv."

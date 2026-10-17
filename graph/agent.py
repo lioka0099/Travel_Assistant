@@ -2,7 +2,7 @@ import logging
 from datetime import date
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, ToolMessage, trim_messages
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage, trim_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
@@ -48,8 +48,12 @@ def build_graph(agent_model: BaseChatModel, review_model: BaseChatModel):
         messages = state["messages"]
         _, turn = current_turn(messages)
         start = max(len(messages) - len(turn) - 1, 0)  # index of the user's latest question
+        # A turn cut off mid-way (e.g. by a Streamlit rerun) can leave a tool call with no result,
+        # which Groq rejects on every later call, so drop those.
+        answered = {m.tool_call_id for m in messages[:start] if isinstance(m, ToolMessage)}
+        earlier = [m for m in messages[:start] if not isinstance(m, AIMessage) or all(c["id"] in answered for c in m.tool_calls)]
         # Trim only earlier turns: the current question and its tool results must always reach the model.
-        earlier = trim_messages(messages[:start], max_tokens=HISTORY_LIMIT, token_counter=len, start_on="human")
+        earlier = trim_messages(earlier, max_tokens=HISTORY_LIMIT, token_counter=len, start_on="human")
         return {"messages": [agent_llm.invoke([system, *earlier, *messages[start:]])]}
 
     def after_agent(state: AgentState) -> str:

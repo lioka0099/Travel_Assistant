@@ -7,7 +7,8 @@ from pydantic import Field
 class ScriptedModel(BaseChatModel):
     """Fake chat model for tests: returns scripted replies in order and records every input.
 
-    Script items are AIMessages (agent), Review objects (reviewer) or Exceptions (raised).
+    Script items are AIMessages (agent), Review objects (reviewer) or exceptions (raised; BaseExceptions too,
+    to mimic Streamlit's rerun/stop signals).
     """
 
     script: list
@@ -20,7 +21,7 @@ class ScriptedModel(BaseChatModel):
     def _next(self, messages):
         self.calls.append(messages)
         item = self.script.pop(0)
-        if isinstance(item, Exception):
+        if isinstance(item, BaseException):
             raise item
         return item
 
