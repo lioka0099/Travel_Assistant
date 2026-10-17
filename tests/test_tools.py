@@ -1,3 +1,4 @@
+from graph.tools.clock import get_local_time
 from graph.tools.countries import find_country
 from graph.tools.location import get_user_location
 from graph.tools.travel_time import format_duration, parse_route
@@ -33,15 +34,34 @@ def test_parse_route():
     assert parse_route(snapped_far) is None  # London → New York
 
 
+def country(cca2, cca3, common, official, *alt):
+    return {"name": {"common": common, "official": official}, "cca2": cca2, "cca3": cca3, "altSpellings": [cca2, *alt]}
+
+
 def test_find_country():
+    # Names and order copy traps in the real mledoze dataset; Equatorial Guinea's "Guinea" spelling is made up.
     countries = [
-        {"name": {"common": "United Kingdom", "official": "United Kingdom of Great Britain and Northern Ireland"},
-         "cca2": "GB", "cca3": "GBR", "altSpellings": ["GB", "UK", "Great Britain"]},
-        {"name": {"common": "South Korea", "official": "Republic of Korea"}, "cca2": "KR", "cca3": "KOR", "altSpellings": ["KR"]},
+        country("AW", "ABW", "Aruba", "Aruba"),  # first in the dataset, so an empty query used to match it
+        country("AS", "ASM", "American Samoa", "American Samoa"),  # comes before United States
+        country("GQ", "GNQ", "Equatorial Guinea", "Republic of Equatorial Guinea", "Guinea"),
+        country("GN", "GIN", "Guinea", "Republic of Guinea"),
+        country("GB", "GBR", "United Kingdom", "United Kingdom of Great Britain and Northern Ireland", "UK", "Great Britain"),
+        country("IE", "IRL", "Ireland", "Republic of Ireland"),
+        country("KR", "KOR", "South Korea", "Republic of Korea"),
+        country("TR", "TUR", "Türkiye", "Republic of Türkiye", "Turkiye", "Republic of Turkey"),
+        country("US", "USA", "United States", "United States of America", "USA", "United States of America"),
     ]
-    assert find_country("uk", countries)["cca2"] == "GB"
-    assert find_country("Korea", countries)["cca2"] == "KR"
-    assert find_country("Narnia", countries) is None
+    expected = {
+        "uk": "GB", "the UK": "GB", "Britain": "GB", "England": "GB", "Scotland": "GB", "Wales": "GB",
+        "Northern Ireland": "GB", "Ireland": "IE", "Korea": "KR", "Turkey": "TR", "America": "US", "the USA": "US",
+        "Guinea": "GN", "Narnia": None, "": None, "  ": None,
+    }
+    assert {q: (find_country(q, countries) or {}).get("cca2") for q in expected} == expected
+
+
+def test_local_time_for_a_region_name_is_unknown():
+    # "Asia" is a folder in the timezone database, so ZoneInfo raises IsADirectoryError
+    assert get_local_time.invoke({"timezone": "Asia"})["summary"] == "Unknown timezone Asia"
 
 
 def test_user_location_from_config():
