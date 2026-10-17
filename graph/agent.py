@@ -8,10 +8,11 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel, Field
 
-from .prompts import AGENT_SYSTEM, REVIEW_SYSTEM
+from .prompts import AGENT_SYSTEM, BUDGET_NOTE, REVIEW_SYSTEM
 from .tools import TOOLS
 
 MAX_REVIEWS = 3  # first draft + up to 2 revisions
+TOOL_BUDGET = 12  # tool results per question; after that the agent must answer with what it has
 HISTORY_LIMIT = 30  # messages sent to the agent model; the checkpoint keeps everything
 REVIEWER = "reviewer"  # name on feedback messages, so they aren't mistaken for the user's question
 
@@ -62,7 +63,10 @@ def build_graph(agent_model: BaseChatModel, review_model: BaseChatModel):
         earlier = [m for m in messages[:start] if not isinstance(m, AIMessage) or all(c["id"] in answered for c in m.tool_calls)]
         # Trim only earlier turns: the current question and its tool results must always reach the model.
         earlier = trim_messages(earlier, max_tokens=HISTORY_LIMIT, token_counter=len, start_on="human")
-        return {"messages": [agent_llm.invoke([system, *earlier, *messages[start:]])]}
+        prompt = [system, *earlier, *messages[start:]]
+        if sum(isinstance(m, ToolMessage) for m in turn) >= TOOL_BUDGET:  # no tools bound: it has to answer now
+            return {"messages": [agent_model.invoke([*prompt, SystemMessage(BUDGET_NOTE)])]}
+        return {"messages": [agent_llm.invoke(prompt)]}
 
     def after_agent(state: AgentState) -> str:
         return "tools" if state["messages"][-1].tool_calls else "reviewer"

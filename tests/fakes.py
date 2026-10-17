@@ -13,6 +13,7 @@ class ScriptedModel(BaseChatModel):
 
     script: list
     calls: list = Field(default_factory=list)
+    tools_bound: list = Field(default_factory=list)  # per agent call: were tools bound?
 
     @property
     def _llm_type(self) -> str:
@@ -26,10 +27,11 @@ class ScriptedModel(BaseChatModel):
         return item
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        self.tools_bound.append("tools" in kwargs)
         return ChatResult(generations=[ChatGeneration(message=self._next(messages))])
 
     def bind_tools(self, tools, **kwargs):
-        return self
+        return self.bind(tools=[t.name for t in tools])
 
     def with_structured_output(self, schema, **kwargs):
         return RunnableLambda(self._next)

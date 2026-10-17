@@ -47,3 +47,5 @@ General travel advice that states no specific facts (e.g. packing tips) is fine 
 Write each issue as a short plain-language phrase naming what is wrong, e.g. "opening hours for the Louvre not supported by any source".
 Return approved=true with an empty issues list when everything passes.
 """
+
+BUDGET_NOTE = "You've used all your tool calls for this question. Answer now with the data you have, and say what you couldn't check."

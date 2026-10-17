@@ -9,7 +9,7 @@ from langchain_groq import ChatGroq
 
 from fakes import ScriptedModel
 from graph import build_graph
-from graph.agent import MAX_REVIEWS, Review
+from graph.agent import MAX_REVIEWS, TOOL_BUDGET, Review
 from graph.tools import TOOLS
 from graph.tools.http import session
 from llm.llm_client import AGENT_MODEL, REVIEW_MODEL, make_agent_model, make_review_model
@@ -217,3 +217,14 @@ def test_empty_draft_is_sent_back_without_a_review_call():
     assert out["final_answer"] == "Pack layers."
     assert len(reviewer.calls) == 1
     assert "the answer was empty" in agent.calls[1][-1].content
+
+
+def test_agent_answers_without_tools_once_the_tool_budget_is_used():
+    # "A weekend trip within 2 hours' drive" can take 16+ tool calls; past the budget the agent must answer.
+    calls = [call("get_local_time", {"timezone": "Asia/Tokyo"}, id=f"call_{i}") for i in range(TOOL_BUDGET)]
+    agent = ScriptedModel(script=[*calls, AIMessage("Here's what I found.")])
+    reviewer = ScriptedModel(script=[ok()])
+    out = run(build_graph(agent, reviewer), "Find me a weekend trip")
+    assert agent.tools_bound == [True] * TOOL_BUDGET + [False]
+    assert "Answer now" in agent.calls[-1][-1].content
+    assert out["final_answer"] == "Here's what I found."

@@ -19,7 +19,7 @@ flowchart LR
     R -- "issues, 3rd review" --> N([Answer + ⚠️ note])
 ```
 
-1. **Agent loop.** The agent model has six tools bound to it. It calls tools until it has what it needs, then writes a draft. Nothing in the code decides which tools to use; the model does.
+1. **Agent loop.** The agent model has six tools bound to it. It calls tools until it has what it needs, then writes a draft. Nothing in the code decides which tools to use; the model does. After 12 tool results for one message, the agent gets no more tools and must answer with what it has.
 2. **Cross-model review.** A reviewer from a different model family (Alibaba's Qwen vs OpenAI's gpt-oss) checks the draft. It also gets today's date and the previous question and answer, so follow-ups make sense. It checks that:
    - every fact matches the tool results;
    - the question is answered;
