@@ -115,15 +115,16 @@ def test_new_turn_resets_review_state():
     assert "second question" in reviewer.calls[2][1].content
 
 
-def test_long_turn_keeps_the_question_in_agent_input():
-    # 18 tool calls make the turn longer than HISTORY_LIMIT; the question must still reach the agent.
-    calls = [call("get_local_time", {"timezone": "Asia/Tokyo"}, id=f"call_{i}") for i in range(18)]
+def test_long_turn_keeps_the_question_in_agent_input(monkeypatch):
+    # 6 tool calls (12 messages) make the turn longer than HISTORY_LIMIT; the question must still reach the agent.
+    monkeypatch.setattr("graph.agent.HISTORY_LIMIT", 4)
+    calls = [call("get_local_time", {"timezone": "Asia/Tokyo"}, id=f"call_{i}") for i in range(6)]
     agent = ScriptedModel(script=[*calls, AIMessage("Done.")])
     reviewer = ScriptedModel(script=[ok()])
     run(build_graph(agent, reviewer), "Plan my trip")
     last_input = agent.calls[-1]
     assert any(isinstance(m, HumanMessage) and m.content == "Plan my trip" for m in last_input)
-    assert sum(isinstance(m, ToolMessage) for m in last_input) == 18
+    assert sum(isinstance(m, ToolMessage) for m in last_input) == 6
 
 
 def test_reviewer_failure_shows_draft_marked_unchecked():
@@ -219,15 +220,55 @@ def test_empty_draft_is_sent_back_without_a_review_call():
     assert "the answer was empty" in agent.calls[1][-1].content
 
 
+def budget_calls():
+    return [call("get_local_time", {"timezone": "Asia/Tokyo"}, id=f"call_{i}") for i in range(TOOL_BUDGET)]
+
+
 def test_agent_answers_without_tools_once_the_tool_budget_is_used():
     # "A weekend trip within 2 hours' drive" can take 16+ tool calls; past the budget the agent must answer.
-    calls = [call("get_local_time", {"timezone": "Asia/Tokyo"}, id=f"call_{i}") for i in range(TOOL_BUDGET)]
-    agent = ScriptedModel(script=[*calls, AIMessage("Here's what I found.")])
+    # With no tools bound, an API can reject tool calls in the history (Groq did), so none are sent.
+    earlier = [call("get_local_time", {"timezone": "Europe/Paris"}, id="early"), AIMessage("It's noon in Paris.")]
+    agent = ScriptedModel(script=[*earlier, *budget_calls(), AIMessage("Here's what I found.")])
+    reviewer = ScriptedModel(script=[ok(), ok()])
+    graph = build_graph(agent, reviewer)
+    run(graph, "What time is it in Paris?")
+    out = run(graph, "Find me a weekend trip")
+    assert agent.tools_bound == [True, True] + [True] * TOOL_BUDGET + [False]
+    budget_input = agent.calls[-1]
+    assert not [m for m in budget_input if isinstance(m, ToolMessage) or (isinstance(m, AIMessage) and m.tool_calls)]
+    assert [m.content for m in budget_input[1:-1]] == ["What time is it in Paris?", "It's noon in Paris.", "Find me a weekend trip"]
+    note = budget_input[-1]
+    assert isinstance(note, HumanMessage) and "Answer now" in note.content
+    assert note.content.count("Time in Asia/Tokyo") == TOOL_BUDGET  # this turn's tool results, as text
+    assert reviewer.calls[-1][1].content.count("Time in Asia/Tokyo") == TOOL_BUDGET  # the reviewer still gets them
+    assert out["final_answer"] == "Here's what I found."
+
+
+def test_tool_call_past_the_budget_is_dropped():
+    # No tools are bound, but if the model still asks for one, the draft goes to review instead of the tools.
+    raw = [{"id": "x", "type": "function", "function": {"name": "web_search", "arguments": "{}"}}]
+    stray = AIMessage(
+        "Here's what I found.",
+        tool_calls=[{"name": "web_search", "args": {}, "id": "x"}],
+        additional_kwargs={"tool_calls": raw},  # how OpenAI's raw reply carries them
+    )
+    agent = ScriptedModel(script=[*budget_calls(), stray])
     reviewer = ScriptedModel(script=[ok()])
     out = run(build_graph(agent, reviewer), "Find me a weekend trip")
-    assert agent.tools_bound == [True] * TOOL_BUDGET + [False]
-    assert "Answer now" in agent.calls[-1][-1].content
     assert out["final_answer"] == "Here's what I found."
+    assert sum(isinstance(m, ToolMessage) for m in out["messages"]) == TOOL_BUDGET
+    draft = out["messages"][-1]
+    assert not draft.tool_calls and "tool_calls" not in draft.additional_kwargs
+
+
+def test_revision_past_the_budget_gets_the_feedback():
+    agent = ScriptedModel(script=[*budget_calls(), AIMessage("Draft 1"), AIMessage("Draft 2")])
+    reviewer = ScriptedModel(script=[reject("drive time for Akko not checked"), ok()])
+    out = run(build_graph(agent, reviewer), "Find me a weekend trip")
+    *_, question, draft, feedback, note = agent.calls[-1]
+    assert (question.content, draft.content) == ("Find me a weekend trip", "Draft 1")
+    assert "drive time for Akko not checked" in feedback.content and "Answer now" in note.content
+    assert out["final_answer"] == "Draft 2"
 
 
 def test_earlier_turns_reach_the_agent():

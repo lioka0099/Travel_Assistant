@@ -48,4 +48,7 @@ Write each issue as a short plain-language phrase naming what is wrong, e.g. "op
 Return approved=true with an empty issues list when everything passes.
 """
 
-BUDGET_NOTE = "You've used all your tool calls for this question. Answer now with the data you have, and say what you couldn't check."
+BUDGET_NOTE = (
+    "You've used all your tool calls for this question; their results are below. "
+    "Answer now using only this data, and say what you couldn't check."
+)

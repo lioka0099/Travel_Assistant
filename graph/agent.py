@@ -64,8 +64,15 @@ def build_graph(agent_model: BaseChatModel, review_model: BaseChatModel):
         # Trim only earlier turns: the current question and its tool results must always reach the model.
         earlier = trim_messages(earlier, max_tokens=HISTORY_LIMIT, token_counter=len, start_on="human")
         prompt = [system, *earlier, *messages[start:]]
-        if sum(isinstance(m, ToolMessage) for m in turn) >= TOOL_BUDGET:  # no tools bound: it has to answer now
-            return {"messages": [agent_model.invoke([*prompt, SystemMessage(BUDGET_NOTE)])]}
+        results = [m.content for m in turn if isinstance(m, ToolMessage)]
+        if len(results) >= TOOL_BUDGET:  # no tools bound: it has to answer now
+            # Without tools, an API can reject tool calls in the history (Groq does), so leave them out and
+            # send this turn's results as text, after the question and any drafts and feedback.
+            plain = [m for m in prompt if not isinstance(m, ToolMessage) and not (isinstance(m, AIMessage) and m.tool_calls)]
+            data = "\n".join(results)
+            reply = agent_model.invoke([*plain, HumanMessage(f"{BUDGET_NOTE}\n\n<tool_results>\n{data}\n</tool_results>")])
+            # A tool call here would loop back to the tools: keep only the text, so the draft goes to review.
+            return {"messages": [AIMessage(reply.content) if reply.tool_calls else reply]}
         return {"messages": [agent_llm.invoke(prompt)]}
 
     def after_agent(state: AgentState) -> str:
