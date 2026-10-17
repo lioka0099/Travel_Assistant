@@ -185,9 +185,9 @@ def run_turn(text: str) -> None:
                     apply_update(node, out, turn, status)
         except Exception as e:  # any failure becomes a plain message with a way out (#9)
             turn = {"role": "assistant", "error": friendly_error(e), "details": f"{type(e).__name__}: {e}"}
-        # Cleared only now: a Streamlit rerun (a BaseException) mid-turn leaves it set, so the turn runs again.
-        st.session_state.pending = None
         status.empty()
+        # Cleared only as the turn is saved: a Streamlit rerun (a BaseException) mid-turn leaves it set, so the turn runs again.
+        st.session_state.pending = None
         st.session_state.chat.append(turn)
         render_assistant(turn, last=True)
 

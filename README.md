@@ -29,7 +29,7 @@ flowchart LR
 3. **Bounded revisions.** Rejected drafts go back to the agent with the reviewer's feedback, and every revision is reviewed again, up to 3 reviews per message. If the last review still finds problems, the answer ships with an honest "⚠️ I couldn't double-check: …" note. If the reviewer model itself is unavailable (after one retry), the draft is shown marked "⚠️ I couldn't double-check this answer."
 4. **Memory.** Conversation memory lives in LangGraph's checkpointer, one thread per browser session.
 
-The whole graph is one file of about 100 lines: [`graph/agent.py`](graph/agent.py).
+The whole graph is one file of about 130 lines: [`graph/agent.py`](graph/agent.py).
 
 ## Tools
 
