@@ -13,7 +13,7 @@ from .tools import TOOLS
 
 MAX_REVIEWS = 3  # first draft + up to 2 revisions
 TOOL_BUDGET = 12  # tool results per question; after that the agent must answer with what it has
-HISTORY_LIMIT = 30  # messages sent to the agent model; the checkpoint keeps everything
+HISTORY_LIMIT = 30  # messages from earlier turns sent to the agent model; the checkpoint keeps everything
 REVIEWER = "reviewer"  # name on feedback messages, so they aren't mistaken for the user's question
 
 logger = logging.getLogger(__name__)

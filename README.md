@@ -80,7 +80,7 @@ Settings go in a `.env` file or in Streamlit secrets:
 pytest -q
 ```
 
-The tests run offline in about 2 seconds. Scripted fake models drive every path through the graph: approval, revision, the review limit, a reviewer outage, tool errors, long turns, and recovery after a failed turn. Headless Streamlit `AppTest`s cover the UI.
+The tests run offline in about 2 seconds. Scripted fake models drive every path through the graph: approval, revision, the review limit, a reviewer retry and outage, tool errors, the tool budget, long turns, and recovery after a failed or interrupted turn. Headless Streamlit `AppTest`s cover the UI.
 
 ## Screenshots
 

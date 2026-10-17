@@ -97,6 +97,8 @@ def friendly_error(e: Exception) -> str:
         return "The AI service is busy right now. Wait a moment and try again."
     if isinstance(e, groq.AuthenticationError):
         return "The AI service isn't set up correctly (API key problem)."
+    if isinstance(e, groq.APIStatusError) and e.status_code == 413:  # request too large
+        return "This conversation has gotten too long for the AI service. Start a new chat to continue."
     if "model_decommissioned" in str(e) or "model_not_found" in str(e):
         return "The AI model this app uses is no longer available. The app needs its model setting updated."
     if isinstance(e, GraphRecursionError):
@@ -148,8 +150,10 @@ def render_assistant(turn: dict, last: bool) -> None:
     if not turn["steps"] and not turn["fixes"]:
         return  # greetings, declines, general advice: nothing to show (#8)
     check = "double-checked ✓" if turn["checked"] else "couldn't fully double-check ⚠️"
-    with st.expander(f"How I got this · {plural(len(turn['steps']), 'step')} · {check}"):
-        st.markdown(md("\n".join(f"{i}. {s}" for i, s in enumerate(turn["steps"], 1))))
+    steps = f" · {plural(len(turn['steps']), 'step')}" if turn["steps"] else ""  # a fix round may use no tools
+    with st.expander(f"How I got this{steps} · {check}"):
+        if turn["steps"]:
+            st.markdown(md("\n".join(f"{i}. {s}" for i, s in enumerate(turn["steps"], 1))))
         if turn["checked"]:
             fixed = f" (fixed {plural(turn['fixes'], 'detail')})" if turn["fixes"] else ""
             st.markdown(f"✓ Double-checked the answer against this data{fixed}")

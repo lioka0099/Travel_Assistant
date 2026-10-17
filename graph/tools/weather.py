@@ -7,15 +7,20 @@ FORECAST_DAYS = 16
 DEFAULT_DAYS = 7
 
 
+def place_label(result: dict) -> str:
+    """'Springfield, Illinois, United States' from an Open-Meteo geocoding result, skipping repeats ('Tokyo, Japan')."""
+    return ", ".join(dict.fromkeys(p for p in (result["name"], result.get("admin1"), result.get("country")) if p))
+
+
 def geocode(place: str) -> dict | None:
-    """Best match for a place name: name, country, lat, lon. None if not found."""
+    """Best match for a place name: name, place (the full label), lat, lon. None if not found."""
     r = session.get(GEOCODE_URL, params={"name": place, "count": 1}, timeout=20)
     r.raise_for_status()
     results = r.json().get("results")
     if not results:
         return None
     top = results[0]
-    return {"name": top["name"], "country": top.get("country", ""), "lat": top["latitude"], "lon": top["longitude"]}
+    return {"name": top["name"], "place": place_label(top), "lat": top["latitude"], "lon": top["longitude"]}
 
 
 def pick_days(days: list[dict], start_date: str | None, end_date: str | None) -> list[dict]:
@@ -32,6 +37,7 @@ def get_weather(place: str, start_date: str | None = None, end_date: str | None 
 
     Covers today up to 16 days ahead. Dates are ISO (YYYY-MM-DD); omit both for the next 7 days,
     or give only start_date for a single day. Use for weather, temperature, rain or what-to-wear questions.
+    If a place name is ambiguous, pass "city, region", e.g. "Springfield, Illinois".
     """
     g = geocode(place)
     if not g:
@@ -58,7 +64,7 @@ def get_weather(place: str, start_date: str | None = None, end_date: str | None 
             daily["precipitation_probability_max"],
         )
     ]
-    where = f"{g['name']}, {g['country']}"
+    where = g["place"]
     picked = pick_days(days, start_date, end_date)
     if not picked:
         return {"summary": f"No forecast for those dates; forecasts cover {days[0]['date']} to {days[-1]['date']}", "place": where}

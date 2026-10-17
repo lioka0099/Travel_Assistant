@@ -2,7 +2,7 @@ from graph.tools.clock import get_local_time
 from graph.tools.countries import find_country
 from graph.tools.location import get_user_location
 from graph.tools.travel_time import format_duration, parse_route
-from graph.tools.weather import pick_days
+from graph.tools.weather import pick_days, place_label
 
 DAYS = [{"date": f"2026-10-{d}", "max_c": 25, "min_c": 18, "rain_chance_pct": 0} for d in range(17, 33)]
 
@@ -71,3 +71,11 @@ def test_user_location_from_config():
     assert out["city"] == "Tel Aviv"
     assert out["summary"] == "Found your location: Tel Aviv, Israel"
     assert get_user_location.invoke({})["summary"] == "Location not available; ask the user where they are."
+
+
+def test_place_label_includes_the_region():
+    assert place_label({"name": "Springfield", "admin1": "Illinois", "country": "United States"}) == (
+        "Springfield, Illinois, United States"
+    )
+    assert place_label({"name": "Tokyo", "admin1": "Tokyo", "country": "Japan"}) == "Tokyo, Japan"
+    assert place_label({"name": "Singapore", "country": "Singapore"}) == "Singapore"

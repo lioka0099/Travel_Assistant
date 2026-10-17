@@ -29,6 +29,7 @@ def get_travel_time(origin: str, destination: str) -> dict:
     """Driving distance and time between two places, by car only (no flights, trains or ferries).
 
     For the user's own location, call get_user_location first and pass its city as origin.
+    If a place name is ambiguous, pass "city, region", e.g. "Springfield, Illinois".
     """
     a, b = geocode(origin), geocode(destination)
     if not a or not b:
@@ -45,8 +46,8 @@ def get_travel_time(origin: str, destination: str) -> dict:
     duration = format_duration(route["duration"])
     return {
         "summary": f"Drive time {a['name']} → {b['name']}: {duration}",
-        "origin": f"{a['name']}, {a['country']}",
-        "destination": f"{b['name']}, {b['country']}",
+        "origin": a["place"],
+        "destination": b["place"],
         "distance_km": round(route["distance"] / 1000, 1),
         "duration_min": round(route["duration"] / 60),
         "duration": duration,

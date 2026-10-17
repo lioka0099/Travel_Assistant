@@ -9,7 +9,7 @@ from langchain_groq import ChatGroq
 
 from fakes import ScriptedModel
 from graph import build_graph
-from graph.agent import MAX_REVIEWS, TOOL_BUDGET, Review
+from graph.agent import HISTORY_LIMIT, MAX_REVIEWS, TOOL_BUDGET, Review
 from graph.tools import TOOLS
 from graph.tools.http import session
 from llm.llm_client import AGENT_MODEL, REVIEW_MODEL, make_agent_model, make_review_model
@@ -228,3 +228,25 @@ def test_agent_answers_without_tools_once_the_tool_budget_is_used():
     assert agent.tools_bound == [True] * TOOL_BUDGET + [False]
     assert "Answer now" in agent.calls[-1][-1].content
     assert out["final_answer"] == "Here's what I found."
+
+
+def test_earlier_turns_reach_the_agent():
+    agent = ScriptedModel(script=[AIMessage("Saturday in Paris looks sunny."), AIMessage("Sunday looks rainy.")])
+    reviewer = ScriptedModel(script=[ok(), ok()])
+    graph = build_graph(agent, reviewer)
+    run(graph, "Weather in Paris on Saturday?")
+    run(graph, "and Sunday?")
+    history = [m.content for m in agent.calls[-1][1:]]
+    assert history == ["Weather in Paris on Saturday?", "Saturday in Paris looks sunny.", "and Sunday?"]
+
+
+def test_old_turns_are_trimmed_from_agent_input():
+    turns = HISTORY_LIMIT // 2 + 1  # one question and answer more than HISTORY_LIMIT allows
+    agent = ScriptedModel(script=[AIMessage(f"A{i}") for i in range(turns + 1)])
+    reviewer = ScriptedModel(script=[ok() for _ in range(turns + 1)])
+    graph = build_graph(agent, reviewer)
+    for i in range(turns + 1):
+        run(graph, f"Q{i}")
+    last_input = agent.calls[-1]
+    assert len(last_input) == 1 + HISTORY_LIMIT + 1  # system prompt, trimmed history, the new question
+    assert [m.content for m in last_input[1:3]] == ["Q1", "A1"]  # the oldest question and answer were dropped
