@@ -50,11 +50,14 @@ def test_find_country():
         country("KR", "KOR", "South Korea", "Republic of Korea"),
         country("TR", "TUR", "Türkiye", "Republic of Türkiye", "Turkiye", "Republic of Turkey"),
         country("US", "USA", "United States", "United States of America", "USA", "United States of America"),
+        country("VI", "VIR", "United States Virgin Islands", "Virgin Islands of the United States", "Virgin Islands, U.S."),
     ]
     expected = {
         "uk": "GB", "the UK": "GB", "Britain": "GB", "England": "GB", "Scotland": "GB", "Wales": "GB",
         "Northern Ireland": "GB", "Ireland": "IE", "Korea": "KR", "Turkey": "TR", "America": "US", "the USA": "US",
         "Guinea": "GN", "Narnia": None, "": None, "  ": None,
+        # Dots are ignored ("U.S." partly matched "Virgin Islands, U.S."); partial matches need 3+ characters.
+        "U.S.": "US", "the U.S.A.": "US", "U.K.": "GB", "Virgin Islands, U.S.": "VI", "a": None, "ar": None, "Aru": "AW",
     }
     assert {q: (find_country(q, countries) or {}).get("cca2") for q in expected} == expected
 

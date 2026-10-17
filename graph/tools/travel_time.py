@@ -28,7 +28,7 @@ def parse_route(data: dict) -> dict | None:
 def get_travel_time(origin: str, destination: str) -> dict:
     """Driving distance and time between two places, by car only (no flights, trains or ferries).
 
-    For the user's own location, call get_user_location first and pass its city as origin.
+    For the user's own location, call get_user_location first and pass its "city, region" as origin.
     If a place name is ambiguous, pass "city, region", e.g. "Springfield, Illinois".
     """
     a, b = geocode(origin), geocode(destination)

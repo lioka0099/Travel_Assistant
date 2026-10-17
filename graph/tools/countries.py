@@ -21,8 +21,15 @@ ALIASES = {"america": "us", "england": "gb", "scotland": "gb", "wales": "gb", "n
 
 
 def find_country(name: str, countries: list[dict]) -> dict | None:
-    """Exact match on a name or ISO code, then on an alternative spelling; else the first partial match, same order."""
-    q = name.strip().lower().removeprefix("the ").strip()
+    """Exact match on a name or ISO code, then on an alternative spelling; else the first partial match, same order.
+
+    Dots are ignored ("U.S." is "US"), and only queries of 3+ characters partly match ("a" matched Aruba).
+    """
+
+    def norm(s):
+        return s.lower().replace(".", "")
+
+    q = norm(name).strip().removeprefix("the ").strip()
     q = ALIASES.get(q, q)
     if not q:
         return None
@@ -31,11 +38,14 @@ def find_country(name: str, countries: list[dict]) -> dict | None:
         return [c["name"]["common"], c["name"]["official"]]
 
     tests = [
-        lambda c: q in {n.lower() for n in [*names(c), c["cca2"], c["cca3"]]},
-        lambda c: q in {n.lower() for n in c["altSpellings"]},
-        lambda c: any(q in n.lower() for n in names(c)),
-        lambda c: any(q in n.lower() for n in c["altSpellings"]),  # e.g. Turkey in "Republic of Turkey"
+        lambda c: q in {norm(n) for n in [*names(c), c["cca2"], c["cca3"]]},
+        lambda c: q in {norm(n) for n in c["altSpellings"]},
     ]
+    if len(q) >= 3:
+        tests += [
+            lambda c: any(q in norm(n) for n in names(c)),
+            lambda c: any(q in norm(n) for n in c["altSpellings"]),  # e.g. Turkey in "Republic of Turkey"
+        ]
     return next((c for test in tests for c in countries if test(c)), None)
 
 
