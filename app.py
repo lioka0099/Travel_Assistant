@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 from urllib.parse import urlparse
 
@@ -72,7 +73,10 @@ WELCOME = """
 
 
 def md(text: str) -> str:
-    """Escape $ so prices like '$20 to $30' aren't rendered as LaTeX by st.markdown."""
+    """Make text safe for st.markdown: drop images, keeping their alt text (an image URL is fetched on
+    render, so one injected via a web result could leak the user's data; the replace catches
+    reference-style images), and escape $ so prices like '$20 to $30' aren't rendered as LaTeX."""
+    text = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", text).replace("![", "[")
     return text.replace("$", r"\$")
 
 
@@ -104,7 +108,7 @@ def apply_update(node: str, out: dict, turn: dict, status) -> None:
     """Fold one graph update into the turn being built and refresh the status line."""
     if node == "agent":
         msg = out["messages"][-1]
-        status.markdown("⏳ " + (progress_line(msg.tool_calls[0]) if msg.tool_calls else "Double-checking the answer…"))
+        status.markdown("⏳ " + md(progress_line(msg.tool_calls[0]) if msg.tool_calls else "Double-checking the answer…"))
     elif node == "tools":
         for m in out["messages"]:
             try:
@@ -152,7 +156,7 @@ def render_assistant(turn: dict, last: bool) -> None:
         else:
             st.markdown("⚠️ Some details couldn't be double-checked; see the note in the answer.")
         if turn["sources"]:
-            st.caption("Sources: " + " · ".join(turn["sources"]))
+            st.caption(md("Sources: " + " · ".join(turn["sources"])))
 
 
 def submit(text: str) -> None:

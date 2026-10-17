@@ -29,6 +29,10 @@ class AgentState(MessagesState):
     final_answer: str
 
 
+def today() -> str:
+    return f"{date.today():%A, %Y-%m-%d}"
+
+
 def current_turn(messages: list[BaseMessage]) -> tuple[HumanMessage | None, list[BaseMessage]]:
     """The user's latest question and every message after it."""
     for i in range(len(messages) - 1, -1, -1):
@@ -41,10 +45,14 @@ def current_turn(messages: list[BaseMessage]) -> tuple[HumanMessage | None, list
 def build_graph(agent_model: BaseChatModel, review_model: BaseChatModel):
     """Agent ⇄ tools loop, then a reviewer from another model family checks every draft."""
     agent_llm = agent_model.bind_tools(TOOLS)
-    review_llm = review_model.with_structured_output(Review, method="json_schema", strict=True)
+    # No strict=True: Groq only enforces it for gpt-oss models. One quick retry covers a malformed
+    # review; Groq's client already backs off on rate limits.
+    review_llm = review_model.with_structured_output(Review, method="json_schema").with_retry(
+        stop_after_attempt=2, wait_exponential_jitter=False
+    )
 
     def agent(state: AgentState) -> dict:
-        system = SystemMessage(AGENT_SYSTEM.format(today=f"{date.today():%A, %Y-%m-%d}"))
+        system = SystemMessage(AGENT_SYSTEM.format(today=today()))
         messages = state["messages"]
         _, turn = current_turn(messages)
         start = max(len(messages) - len(turn) - 1, 0)  # index of the user's latest question
@@ -60,27 +68,40 @@ def build_graph(agent_model: BaseChatModel, review_model: BaseChatModel):
         return "tools" if state["messages"][-1].tool_calls else "reviewer"
 
     def reviewer(state: AgentState) -> dict:
-        question, turn = current_turn(state["messages"])
-        draft = state["messages"][-1].content
+        messages = state["messages"]
+        question, turn = current_turn(messages)
+        # The previous question and answer, so follow-ups like "and Sunday?" can be judged.
+        earlier_question, earlier_turn = current_turn(messages[: max(len(messages) - len(turn) - 1, 0)])
+        earlier_answer = next((m.content for m in reversed(earlier_turn) if isinstance(m, AIMessage) and not m.tool_calls), "")
+        earlier = (
+            f"User: {earlier_question.content}\nAssistant: {earlier_answer or '(no answer)'}"
+            if earlier_question
+            else "(none)"
+        )
+        draft = messages[-1].content
         tool_results = "\n".join(m.content for m in turn if isinstance(m, ToolMessage)) or "(no tools were called)"
         previous = "\n".join(f"- {i}" for i in state.get("review_issues") or []) or "(first review)"
         count = state.get("review_count", 0) + 1
-        try:
-            review = review_llm.invoke(
-                [
-                    SystemMessage(REVIEW_SYSTEM),
-                    HumanMessage(
-                        f"Question:\n{question.content if question else ''}\n\n"
-                        f"Tool results:\n{tool_results}\n\n"
-                        f"Previous issues:\n{previous}\n\n"
-                        f"Draft:\n{draft}"
-                    ),
-                ]
-            )
-        except Exception:  # reviewer unavailable (e.g. rate limit): show the draft, clearly marked as unchecked
-            logger.warning("Review failed; showing the draft unchecked", exc_info=True)
-            note = "\n\n⚠️ I couldn't double-check this answer."
-            return {"review_count": count, "review_issues": ["review unavailable"], "final_answer": draft + note}
+        if not draft.strip():  # nothing to check, so don't spend a review call
+            review = Review(approved=False, issues=["the answer was empty"])
+        else:
+            try:
+                review = review_llm.invoke(
+                    [
+                        SystemMessage(REVIEW_SYSTEM.format(today=today())),
+                        HumanMessage(
+                            f"<earlier_chat>\n{earlier}\n</earlier_chat>\n\n"
+                            f"<question>\n{question.content if question else ''}\n</question>\n\n"
+                            f"<tool_results>\n{tool_results}\n</tool_results>\n\n"
+                            f"<previous_issues>\n{previous}\n</previous_issues>\n\n"
+                            f"<draft>\n{draft}\n</draft>"
+                        ),
+                    ]
+                )
+            except Exception as e:  # reviewer unavailable (e.g. rate limit): show the draft, clearly marked as unchecked
+                logger.error("Review failed (%s); showing the draft unchecked", type(e).__name__, exc_info=True)
+                note = "\n\n⚠️ I couldn't double-check this answer."
+                return {"review_count": count, "review_issues": ["review unavailable"], "final_answer": draft + note}
         if review.approved:
             return {"review_count": count, "review_issues": [], "final_answer": draft}
         issues = review.issues or ["parts of this answer"]

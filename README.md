@@ -20,13 +20,13 @@ flowchart LR
 ```
 
 1. **Agent loop.** The agent model has six tools bound to it. It calls tools until it has what it needs, then writes a draft. Nothing in the code decides which tools to use; the model does.
-2. **Cross-model review.** A reviewer from a different model family (Alibaba's Qwen vs OpenAI's gpt-oss) checks the draft:
+2. **Cross-model review.** A reviewer from a different model family (Alibaba's Qwen vs OpenAI's gpt-oss) checks the draft. It also gets today's date and the previous question and answer, so follow-ups make sense. It checks that:
    - every fact matches the tool results;
    - the question is answered;
    - nothing is invented;
    - ambiguity is handled;
    - the answer stays on travel.
-3. **Bounded revisions.** Rejected drafts go back to the agent with the reviewer's feedback, and every revision is reviewed again, up to 3 reviews per message. If the last review still finds problems, the answer ships with an honest "⚠️ I couldn't double-check: …" note. If the reviewer model itself is unavailable, the draft is shown marked "⚠️ I couldn't double-check this answer."
+3. **Bounded revisions.** Rejected drafts go back to the agent with the reviewer's feedback, and every revision is reviewed again, up to 3 reviews per message. If the last review still finds problems, the answer ships with an honest "⚠️ I couldn't double-check: …" note. If the reviewer model itself is unavailable (after one retry), the draft is shown marked "⚠️ I couldn't double-check this answer."
 4. **Memory.** Conversation memory lives in LangGraph's checkpointer, one thread per browser session.
 
 The whole graph is one file of about 100 lines: [`graph/agent.py`](graph/agent.py).
