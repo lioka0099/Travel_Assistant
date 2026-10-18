@@ -111,23 +111,6 @@ While this runs, the user sees plain-language status lines ("Finding your locati
 | **A turn interrupted mid-way** | A Streamlit rerun can cut a turn off between a tool call and its result. The turn is finished on the next run, and any tool call left without a result is dropped from history, since model APIs reject those on every later call. |
 | **Any other error** | The user sees a plain-language message with a **Try again** button, and the technical details sit in a collapsed box. |
 
-## UX
-
-The chat UI was designed against [Nielsen's 10 usability heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/):
-
-| Heuristic | In the app |
-|---|---|
-| 1. Visibility of system status | A live status line while the agent works ("Checking the weather in Paris…", "Double-checking the answer…", "Fixing a detail…"), and a badge showing when your location is being used. |
-| 2. Match with the real world | Plain words, °C, "1 h 19 min". Never tool or function names. |
-| 3. User control and freedom | **New chat** at any time, **Try again** after an error. |
-| 4. Consistency and standards | A standard chat layout with the same answer format every time: a one-line summary, then bullets. |
-| 5. Error prevention | The limits are stated up front (forecasts up to 16 days ahead, drive times by car only), and the input is disabled while an answer is being written. |
-| 6. Recognition rather than recall | Clickable example questions on the welcome screen and a "What can I ask?" popover. |
-| 7. Flexibility and efficiency | Newcomers click an example. Others type follow-ups like "and in England?" that build on the conversation. |
-| 8. Minimalist design | "How I got this" (steps, double-check status and sources) is collapsed by default and hidden for greetings. |
-| 9. Help users recover from errors | Every error is explained in plain language with a way out. |
-| 10. Help and documentation | The "What can I ask?" popover lists what the assistant can do and its limits. |
-
 ## Tools
 
 | Tool | What it does | Source |
@@ -215,4 +198,4 @@ Settings go in a `.env` file or in Streamlit secrets:
 ## Project history
 
 - **v1 (September 2025):** a hand-wired LangGraph pipeline with an intent router, JSON planners, regex policies, a composer and an optional critique step. About 1,150 lines of orchestration. Code, not the model, decided which tools ran. No tests.
-- **v2 (October 2026):** the app broke when Groq retired its model, which became the push to rebuild it as a real agent. The graph and prompts are now about 200 lines. The model chooses the tools, a cross-model reviewer checks every answer, the UI was redesigned around usability heuristics, and the project gained 52 tests and CI.
+- **v2 (October 2026):** the app broke when Groq retired its model, which became the push to rebuild it as a real agent. The graph and prompts are now about 200 lines. The model chooses the tools, a cross-model reviewer checks every answer, and the project gained 52 tests and CI.
